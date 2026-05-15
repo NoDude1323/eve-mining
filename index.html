@@ -1,0 +1,2545 @@
+﻿<!DOCTYPE html>
+<!-- saved from url=(0056)file:///C:/Users/Thors/Downloads/eve-mining-journal.html -->
+<html lang="de"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EVE Mining Journal</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;600;700;900&family=Share+Tech+Mono&display=swap');
+
+:root {
+  --bg: #04080f;
+  --bg2: #080e1a;
+  --bg3: #0c1422;
+  --cyan: #00d4ff;
+  --cyan2: #0099cc;
+  --green: #00e8a0;
+  --red: #ff3355;
+  --gold: #ffcc44;
+  --purple: #b06dff;
+  --text: #c8dce8;
+  --muted: #4a6070;
+  --border: rgba(0,212,255,0.15);
+  --border2: rgba(0,212,255,0.3);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Exo 2', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Scanlines */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,212,255,0.015) 3px, rgba(0,212,255,0.015) 4px);
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* Stars background */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(1px 1px at 20% 30%, rgba(0,212,255,0.4) 0%, transparent 100%),
+    radial-gradient(1px 1px at 80% 10%, rgba(255,255,255,0.3) 0%, transparent 100%),
+    radial-gradient(1px 1px at 50% 70%, rgba(0,212,255,0.3) 0%, transparent 100%),
+    radial-gradient(1px 1px at 10% 80%, rgba(255,255,255,0.2) 0%, transparent 100%),
+    radial-gradient(1px 1px at 90% 60%, rgba(176,109,255,0.3) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* HEADER */
+header {
+  position: relative;
+  z-index: 10;
+  background: linear-gradient(180deg, rgba(0,212,255,0.05) 0%, transparent 100%);
+  border-bottom: 1px solid var(--border2);
+  padding: 18px 28px 0;
+}
+
+.header-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.logo {
+  width: 46px; height: 46px;
+  background: linear-gradient(135deg, #00d4ff, #0066ff);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+  box-shadow: 0 0 24px rgba(0,212,255,0.5), inset 0 1px 0 rgba(255,255,255,0.2);
+  flex-shrink: 0;
+}
+
+.header-title h1 {
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  color: #e8f4ff;
+  text-shadow: 0 0 30px rgba(0,212,255,0.6);
+  text-transform: uppercase;
+}
+
+.header-title p {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: rgba(0,212,255,0.5);
+  letter-spacing: 4px;
+  margin-top: 2px;
+}
+
+.header-stats {
+  margin-left: auto;
+  display: flex;
+  gap: 28px;
+  align-items: flex-end;
+}
+
+.header-stat { text-align: right; }
+.header-stat .label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.header-stat .value {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.v-green { color: var(--green); text-shadow: 0 0 16px rgba(0,232,160,0.5); }
+.v-red { color: var(--red); text-shadow: 0 0 16px rgba(255,51,85,0.5); }
+.v-cyan { color: var(--cyan); text-shadow: 0 0 16px rgba(0,212,255,0.5); }
+
+/* TABS */
+nav {
+  display: flex;
+  gap: 0;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  padding: 10px 22px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+}
+.tab-btn:hover { color: var(--cyan); }
+.tab-btn.active {
+  color: var(--cyan);
+  border-bottom-color: var(--cyan);
+  background: rgba(0,212,255,0.05);
+}
+
+/* MAIN */
+main {
+  position: relative;
+  z-index: 10;
+  padding: 24px 28px;
+  max-width: 1660px;
+  margin: 0 auto;
+}
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* CARDS */
+.card {
+  background: linear-gradient(135deg, var(--bg2), var(--bg3));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: border-color 0.2s;
+}
+.card:hover { border-color: var(--border2); }
+
+.card-header {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  color: var(--cyan);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.card-header::before {
+  content: '';
+  display: inline-block;
+  width: 8px; height: 8px;
+  border: 1px solid var(--cyan);
+  transform: rotate(45deg);
+  flex-shrink: 0;
+}
+
+/* STAT CARDS GRID */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  padding: 18px 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::after {
+  content: '';
+  position: absolute;
+  top: -20px; right: -20px;
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  opacity: 0.04;
+}
+
+.stat-card .s-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.stat-card .s-value {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.stat-card .s-sub {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--muted);
+}
+.stat-card .s-icon {
+  position: absolute;
+  right: 16px; top: 14px;
+  font-size: 26px;
+  opacity: 0.12;
+}
+
+/* CHARTS GRID */
+.charts-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+.charts-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+
+.chart-card { padding: 20px; }
+.chart-canvas-wrap { position: relative; }
+.daily-pilot-pies {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.daily-pilot-pie {
+  min-width: 0;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255,255,255,0.015);
+}
+.daily-pilot-pie-title {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 8px;
+  text-align: center;
+}
+.daily-pilot-pie-empty {
+  color: var(--muted);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  min-height: 160px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+/* TABLE */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: rgba(0,212,255,0.6);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border2);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+thead th:hover { color: var(--cyan); }
+tbody td {
+  padding: 9px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 12px;
+  font-family: 'Share Tech Mono', monospace;
+  white-space: nowrap;
+}
+tbody tr:hover td { background: rgba(0,212,255,0.04); }
+
+.ore-badge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-family: 'Share Tech Mono', monospace;
+  white-space: nowrap;
+}
+
+/* IMPORT */
+.import-wrap { padding: 24px; }
+.format-hint {
+  background: rgba(0,212,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  line-height: 1.9;
+  color: var(--muted);
+}
+.format-hint .col-highlight { color: var(--cyan); }
+.format-hint .col-red { color: var(--red); }
+
+textarea#importArea,
+textarea#excludedResourcesInput {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  padding: 14px;
+  resize: vertical;
+  outline: none;
+  margin-bottom: 14px;
+  transition: border-color 0.2s;
+}
+textarea#importArea { height: 220px; }
+textarea#excludedResourcesInput { resize: vertical; }
+textarea#importArea:focus,
+textarea#excludedResourcesInput:focus { border-color: var(--cyan); box-shadow: 0 0 0 2px rgba(0,212,255,0.1); }
+.price-input {
+  width: 130px;
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  padding: 7px 9px;
+}
+.price-input:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 2px rgba(0,212,255,0.1); }
+.market-source { font-family:'Share Tech Mono',monospace; font-size:12px; color:var(--muted); }
+
+#tab-sales .import-wrap { padding: 20px; }
+#tab-sales .table-wrap { overflow-x: visible; }
+#tab-sales table { table-layout: fixed; width: 100%; }
+#tab-sales th, #tab-sales td { padding: 9px 5px; font-size: 12px; vertical-align: top; }
+#tab-sales thead th { font-size: 11px; white-space: normal; line-height: 1.25; }
+#tab-sales .ore-badge { font-size: 12px; padding: 3px 9px; }
+#tab-sales .market-source { font-size: 11px; line-height: 1.25; }
+#tab-sales .price-input { width: 100%; max-width: 96px; box-sizing: border-box; padding: 7px 6px; font-size: 12px; }
+#tab-sales input[data-sale-field="actualPrice"] { max-width: 108px; }
+#tab-sales input[data-sale-field="note"] { max-width: 94px !important; }
+#tab-sales td:nth-child(3) .market-source,
+#tab-sales td:nth-child(4) .market-source { font-size: 10px; white-space: normal; overflow-wrap: anywhere; }
+#tab-sales td:nth-child(1), #tab-sales th:nth-child(1) { width: 11%; }
+#tab-sales td:nth-child(2), #tab-sales th:nth-child(2) { width: 4%; }
+#tab-sales td:nth-child(3), #tab-sales th:nth-child(3),
+#tab-sales td:nth-child(4), #tab-sales th:nth-child(4),
+#tab-sales td:nth-child(5), #tab-sales th:nth-child(5) { width: 10%; }
+#tab-sales td:nth-child(6), #tab-sales th:nth-child(6),
+#tab-sales td:nth-child(7), #tab-sales th:nth-child(7),
+#tab-sales td:nth-child(8), #tab-sales th:nth-child(8),
+#tab-sales td:nth-child(9), #tab-sales th:nth-child(9) { width: 9%; }
+#tab-sales td:nth-child(10), #tab-sales th:nth-child(10) { width: 11%; }
+#tab-sales td:nth-child(11), #tab-sales th:nth-child(11) { width: 8%; }
+#tab-sales td:nth-child(10) label.market-source { gap: 2px !important; margin-right: 3px !important; font-size: 11px; }
+#tab-sales td:nth-child(10) input[type="checkbox"] { width: 13px; height: 13px; }
+
+.btn {
+  border: none;
+  border-radius: 8px;
+  font-family: 'Share Tech Mono', monospace;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.btn:hover { filter: brightness(1.2); transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+.btn-primary {
+  background: linear-gradient(135deg, rgba(0,212,255,0.2), rgba(0,102,255,0.2));
+  color: var(--cyan);
+  border: 1px solid rgba(0,212,255,0.4);
+  padding: 12px 28px;
+  font-size: 12px;
+}
+.btn-danger {
+  background: rgba(255,51,85,0.1);
+  color: var(--red);
+  border: 1px solid rgba(255,51,85,0.3);
+  padding: 8px 16px;
+  font-size: 13px;
+}
+.btn-sm {
+  padding: 4px 12px;
+  font-size: 12px;
+}
+
+.msg-box {
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  margin-bottom: 14px;
+  display: none;
+}
+.msg-ok { background: rgba(0,232,160,0.08); border: 1px solid rgba(0,232,160,0.3); color: var(--green); }
+.msg-err { background: rgba(255,51,85,0.08); border: 1px solid rgba(255,51,85,0.3); color: var(--red); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: rgba(0,212,255,0.3); border-radius: 3px; }
+
+/* Filter row */
+.filter-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.filter-row input, .filter-row select {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  padding: 8px 12px;
+  outline: none;
+}
+.filter-row input:focus, .filter-row select:focus { border-color: var(--cyan); }
+.filter-row select option { background: var(--bg2); }
+
+/* Legend item */
+.legend-list { display: flex; flex-direction: column; gap: 6px; }
+.legend-item {
+  display: flex; align-items: center; gap: 8px;
+  font-family: 'Share Tech Mono', monospace; font-size: 12px;
+}
+.legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+@media (max-width: 1100px) {
+  .stats-grid { grid-template-columns: repeat(3, 1fr); }
+  .charts-grid-3 { grid-template-columns: 1fr 1fr; }
+  .daily-pilot-pies { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+  .charts-grid-2 { grid-template-columns: 1fr; }
+  .charts-grid-3 { grid-template-columns: 1fr; }
+  .daily-pilot-pies { grid-template-columns: 1fr; }
+  .header-stats { display: none; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <div class="logo">⛏</div>
+    <div class="header-title">
+      <h1>Eve Mining Journal</h1>
+      <p>Capsuleer Resource Tracker &nbsp;◆&nbsp; Mining Ledger Analyzer</p>
+    </div>
+    <div class="header-stats">
+      <div class="header-stat">
+        <div class="label">Gesamt-Ertrag</div>
+        <div class="value v-green" id="hdrTotal">5.90 B ISK</div>
+      </div>
+      <div class="header-stat">
+        <div class="label">Rückstandsverlust</div>
+        <div class="value v-red" id="hdrLoss">1.29 B ISK</div>
+      </div>
+      <div class="header-stat">
+        <div class="label">Netto</div>
+        <div class="value v-cyan" id="hdrNet">4.61 B ISK</div>
+      </div>
+    </div>
+  </div>
+  <nav>
+    <button class="tab-btn active" onclick="showTab(&#39;dashboard&#39;)">◈ Dashboard</button>
+    <button class="tab-btn" onclick="showTab(&#39;history&#39;)">☰ Verlauf</button>
+    <button class="tab-btn" onclick="showTab(&#39;market&#39;)">◇ Marktpreise</button>
+    <button class="tab-btn" onclick="showTab(&#39;sales&#39;)">◈ Verkaufsposten</button>
+    <button class="tab-btn" onclick="showTab(&#39;import&#39;)">⇩ Import</button>
+  </nav>
+</header>
+
+<main>
+
+<!-- ══════════════ DASHBOARD ══════════════ -->
+<div class="tab-content active" id="tab-dashboard">
+
+  <div class="stats-grid" id="statsGrid"></div>
+
+  <div class="card chart-card">
+    <div class="card-header">Übersicht nach Spielergruppe</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Spielergruppe</th>
+            <th>Sessions</th>
+            <th>Aktive Tage</th>
+            <th>Netto Marktwert</th>
+            <th>Import-Netto</th>
+            <th>Abweichung</th>
+            <th>Allein</th>
+            <th>Flottenanteil</th>
+            <th>Auszahlung</th>
+          </tr>
+        </thead>
+        <tbody id="pilotOverviewBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="charts-grid-2">
+    <div class="card chart-card" style="grid-column:1/-1;">
+      <div class="card-header">Ertrag &amp; Rückstand nach Tag</div>
+      <div class="chart-canvas-wrap" style="height:242px">
+        <canvas id="chartTimeline"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="card chart-card">
+    <div class="card-header">Pilotenanteil pro Tag — letzte 4 Tage</div>
+    <div class="daily-pilot-pies" id="dailyPilotPies"></div>
+  </div>
+
+  <div class="card chart-card">
+    <div class="card-header">Aktivität nach Pilot und Tag</div>
+    <div class="chart-canvas-wrap" style="height:280px">
+      <canvas id="chartPilotActivity"></canvas>
+    </div>
+  </div>
+
+  <div class="charts-grid-2">
+    <div class="card chart-card" style="grid-column: span 1;">
+      <div class="card-header">Erz-Verteilung (Wert)</div>
+      <div style="display:flex; gap:16px; align-items:center;">
+        <div class="chart-canvas-wrap" style="width:180px;height:180px;flex-shrink:0;">
+          <canvas id="chartPie"></canvas>
+        </div>
+        <div class="legend-list" id="pieLegend" style="flex:1; overflow:hidden;"></div>
+      </div>
+    </div>
+    <div class="card chart-card">
+      <div class="card-header">Volumen nach Erz-Typ (m³)</div>
+      <div class="chart-canvas-wrap" style="height:200px">
+        <canvas id="chartVolume"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="card chart-card">
+    <div class="card-header">Gesamtertrag der einzelnen Piloten</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Pilot</th>
+            <th>Spielergruppe</th>
+            <th>Sessions</th>
+            <th>Tage</th>
+            <th>Ertrag</th>
+            <th>Rückstand</th>
+            <th>Netto-Ertrag</th>
+            <th>Ø Netto / Session</th>
+            <th>Volumen</th>
+          </tr>
+        </thead>
+        <tbody id="pilotTotalsBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<!-- ══════════════ VERLAUF ══════════════ -->
+<div class="tab-content" id="tab-history">
+  <div class="filter-row">
+    <input type="text" id="filterText" placeholder="🔍 Suche (Person, Erz, System...)" oninput="renderHistory()" style="min-width:200px;">
+    <select id="filterPilot" onchange="renderHistory()">
+      <option value="">Alle Personen</option>
+    </select>
+    <select id="filterOre" onchange="renderHistory()">
+      <option value="">Alle Erz-Typen</option>
+    </select>
+    <select id="filterSystem" onchange="renderHistory()">
+      <option value="">Alle Systeme</option>
+    </select>
+    <select id="filterDate" onchange="renderHistory()">
+      <option value="">Alle Daten</option>
+    </select>
+    <button class="btn btn-danger btn-sm" onclick="clearAllData()" style="margin-left:auto;">✕ Alle Daten löschen</button>
+  </div>
+  <div class="card" style="padding: 8px;">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sortHistory(&#39;date&#39;)">Datum ↕</th>
+            <th onclick="sortHistory(&#39;pilot&#39;)">Person ↕</th>
+            <th onclick="sortHistory(&#39;ore&#39;)">Erz ↕</th>
+            <th onclick="sortHistory(&#39;amount&#39;)">Menge ↕</th>
+            <th onclick="sortHistory(&#39;resAmount&#39;)">Rückstand ↕</th>
+            <th onclick="sortHistory(&#39;volume&#39;)">Volumen ↕</th>
+            <th onclick="sortHistory(&#39;system&#39;)">System ↕</th>
+            <th onclick="sortHistory(&#39;price&#39;)">Ertrag (ISK) ↕</th>
+            <th onclick="sortHistory(&#39;resPrice&#39;)">Rückstandswert ↕</th>
+            <th>Effizienz</th>
+            <th>Aktion</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+    <div id="historyPagination" style="display:flex;justify-content:center;gap:8px;margin-top:14px;"></div>
+  </div>
+</div>
+
+<!-- ══════════════ MARKET PRICES ══════════════ -->
+<div class="tab-content" id="tab-market">
+  <div class="card import-wrap">
+    <div class="card-header">Marktpreise pro Ressource</div>
+    <div class="format-hint">
+      <strong style="color:var(--cyan);">Marktwert-Modus:</strong><br>
+      Trage den 30-Tage-Durchschnittspreis pro Einheit getrennt für Sofortverkauf und eigene Sell-Order ein. Leere Felder nutzen weiter den Mining-Ledger-Schätzwert.<br>
+      Beim Sofortverkauf wird nur Sales Tax abgezogen; bei eigener Sell-Order werden Sales Tax und Broker Fee abgezogen.
+    </div>
+    <div class="msg-box" id="marketMsg"></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:16px;">
+      <label class="market-source" style="display:block;">
+        Sales Tax (%)
+        <input class="price-input" id="salesTaxPct" placeholder="z.B. 3,6" style="width:100%;margin-top:6px;">
+      </label>
+      <label class="market-source" style="display:block;">
+        Broker Fee (%)
+        <input class="price-input" id="brokerFeePct" placeholder="z.B. 1,5" style="width:100%;margin-top:6px;">
+      </label>
+      <label class="market-source" style="display:block;">
+        Marktregion
+        <select class="price-input" id="marketRegion" style="width:100%;margin-top:6px;">
+          <option value="10000043">Domain / Amarr</option>
+          <option value="10000002">The Forge / Jita</option>
+        </select>
+      </label>
+      <label class="market-source" style="display:block;">
+        Abrechnung
+        <select class="price-input" id="marketSaleMode" style="width:100%;margin-top:6px;" onchange="syncMarketSettingsFromUI();saveMarketPriceData();updateAll();">
+          <option value="seller">Eigene Sell-Order</option>
+          <option value="instant">Sofortverkauf an Buy-Order</option>
+        </select>
+      </label>
+      <div class="market-source" style="align-self:end;padding-bottom:8px;">
+        Aktiver Abzug: <span id="marketFeeTotal" style="color:var(--gold);">3,3%</span><br>
+        Quelle: <span id="marketRegionLabel" style="color:var(--cyan);">Domain / Amarr</span>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Ressource</th>
+            <th>Ledger Ø / Stück</th>
+            <th>Sofortverkauf Buy Ø / Stück</th>
+            <th>Eigene Sell-Order Ø / Stück</th>
+            <th>Abweichung</th>
+            <th>Quelle</th>
+          </tr>
+        </thead>
+        <tbody id="marketPriceBody"></tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:14px;">
+      <button class="btn btn-primary btn-sm" onclick="refreshMarketPricesFromApi()">↻ EVE Tycoon Preise aktualisieren</button>
+      <label class="btn btn-primary btn-sm" style="cursor:pointer;">
+        ⇩ Marktpreis-Datei importieren
+        <input id="marketPriceFile" type="file" accept=".csv,.tsv,.json,.txt" onchange="importMarketPriceFile(event)" style="display:none;">
+      </label>
+      <button class="btn btn-primary btn-sm" onclick="exportMarketPriceTemplate()">↑ Vorlage aus aktuellem Tab exportieren</button>
+      <button class="btn btn-primary btn-sm" onclick="saveMarketPricesFromUI()">✓ Marktpreise speichern</button>
+      <span class="market-source" style="align-self:center;color:var(--muted);">Automatisch per EVE Tycoon oder als CSV/TSV/JSON mit Ressource, TypeID, Buy-Preis und Sell-Preis pro Einheit.</span>
+      <button class="btn btn-danger btn-sm" onclick="clearMarketPrices()">✕ Marktpreise leeren</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ SALES LOTS ══════════════ -->
+<div class="tab-content" id="tab-sales">
+  <div class="card import-wrap">
+    <div class="card-header">Verkaufsposten</div>
+    <div class="format-hint">
+      <strong style="color:var(--cyan);">Eigene Verkaufsabrechnung:</strong><br>
+      Diese Seite rechnet unabhängig vom Dashboard. Hier zählt nur, welche Menge Material einer Spielergruppe gehört und welcher tatsächliche Verkaufspreis eingetragen wird.
+    </div>
+    <div class="msg-box" id="salesMsg"></div>
+
+    <div class="stats-grid" id="salesPayoutCards"></div>
+
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;margin-top:18px;">
+      <button class="btn btn-primary btn-sm" onclick="refreshSalesMaterialAverages()">↻ 5T / 20T Ø aktualisieren</button>
+      <button class="btn btn-primary btn-sm" onclick="saveSalePlansFromUI()">✓ Verkaufsposten speichern</button>
+      <button class="btn btn-danger btn-sm" onclick="clearSalePlans()">✕ Verkaufsposten leeren</button>
+      <span class="market-source" style="align-self:center;color:var(--muted);">Striche bedeuten: noch nicht aktualisiert oder keine gespeicherten Werte.</span>
+    </div>
+    <div class="market-source" style="margin-bottom:10px;color:var(--muted);">
+      Solo-Mengen werden direkt der jeweiligen Gruppe zugerechnet. Flottenmenge wird automatisch gleichmäßig auf die angehakten Gruppen verteilt.
+      Die Kacheln zeigen Netto nach Sales Tax und Broker Fee: <span style="color:var(--gold);" id="salesFeeLabel">0,0%</span>.
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Material</th>
+            <th>TypeID</th>
+            <th>5T Sell Ø</th>
+            <th>20T Sell Ø</th>
+            <th>Tatsächlicher Verkaufspreis</th>
+            <th>Solo Alvandeus-Gruppe</th>
+            <th>Solo Kastoro-Gruppe</th>
+            <th>Solo Leevi-Gruppe</th>
+            <th>Flotte gesamt</th>
+            <th>Flottenanteil</th>
+            <th>Notiz</th>
+          </tr>
+        </thead>
+        <tbody id="salesMaterialsBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ IMPORT ══════════════ -->
+<div class="tab-content" id="tab-import">
+  <div class="card import-wrap" style="max-width:860px;">
+    <div class="card-header">EVE Online Mining Ledger Import</div>
+
+    <div class="format-hint">
+      <strong style="color:var(--cyan);">So exportierst du dein Mining Ledger:</strong><br>
+      1. Drücke <span class="col-highlight">Alt+L</span> → Hauptmenü → Geschäftsbuch → Reiter <span class="col-highlight">"Mining Ledger"</span><br>
+      2. Markiere alle Zeilen in der Tabelle &nbsp;→&nbsp; <span class="col-highlight">Strg+A</span><br>
+      3. Kopiere mit <span class="col-highlight">Strg+C</span> und füge unten mit <span class="col-highlight">Strg+V</span> ein<br><br>
+      <strong style="color:var(--cyan);">Erkanntes Format (Tab-getrennt):</strong><br>
+      <span class="col-highlight">Zeitstempel</span> &nbsp;⇥&nbsp;
+      <span class="col-highlight">Erzart</span> &nbsp;⇥&nbsp;
+      <span class="col-highlight">Menge</span> &nbsp;⇥&nbsp;
+      <span class="col-red">Rückstandsmenge</span> &nbsp;⇥&nbsp;
+      <span class="col-highlight">Volumen</span> &nbsp;⇥&nbsp;
+      <span class="col-red">Rückstandsvolumen</span> &nbsp;⇥&nbsp;
+      <span class="col-highlight">Preis ca.</span> &nbsp;⇥&nbsp;
+      <span class="col-red">Rückstandspreis ca.</span> &nbsp;⇥&nbsp;
+      <span class="col-highlight">Sonnensystem</span> &nbsp;⇥&nbsp; Erzart-ID &nbsp;⇥&nbsp; Sonnensystem-ID<br><br>
+      <span style="color:var(--green);">✓</span> Lokalisierte Namen wie <code style="color:var(--muted);">&lt;localized hint="Clear Icicle"&gt;...&lt;/localized&gt;</code> werden automatisch erkannt.<br>
+      <span style="color:var(--green);">✓</span> Kopfzeile wird automatisch übersprungen. Duplikate werden erkannt.
+    </div>
+
+    <div class="msg-box" id="importMsg"></div>
+
+    <div style="margin-bottom:14px;">
+      <label class="market-source" style="display:block;">
+        Person / Pilot
+        <input class="price-input" id="importPilot" placeholder="z.B. Main, Alt, Corp-Mitglied" style="width:100%;max-width:340px;margin-top:6px;">
+      </label>
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <label class="market-source" style="display:block;">
+        Ausgeschlossene Ressourcen / Quest-Erze
+        <textarea id="excludedResourcesInput" placeholder="Ein Eintrag pro Zeile, z.B. Erzname oder TypeID. Diese Ressourcen werden beim Import übersprungen und können aus vorhandenen Daten entfernt werden." style="width:100%;min-height:76px;margin-top:6px;"></textarea>
+      </label>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;">
+        <button class="btn btn-primary btn-sm" onclick="saveExcludedResources()">✓ Ausschlussliste speichern</button>
+        <button class="btn btn-danger btn-sm" onclick="removeExcludedEntries()">✕ Aus vorhandenen Daten entfernen</button>
+      </div>
+    </div>
+
+    <textarea id="importArea" placeholder="Füge hier deine EVE Mining Ledger Daten ein (aus dem Spiel kopiert)...
+
+Beispiel:
+Zeitstempel	Erzart	Menge	Rückstandsmenge	Volumen	Rückstandsvolumen	Preis ca.	Rückstandspreis ca.	Sonnensystem	...
+2026.04.19	&lt;localized hint=&quot;Veldspar&quot;&gt;Veldspar*&lt;/localized&gt;	120000	..."></textarea>
+
+    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+      <button class="btn btn-primary" onclick="doImport()">⇩ Daten importieren</button>
+      <button class="btn btn-primary" onclick="loadSampleData()" style="opacity:0.7;">◈ Beispieldaten laden</button>
+      <span id="entryCount" style="font-family:&#39;Share Tech Mono&#39;,monospace;font-size:11px;color:var(--muted);margin-left:auto;">
+        <span id="countNum">0</span> Einträge geladen
+      </span>
+    </div>
+  </div>
+
+  <div class="card" style="max-width:860px; margin-top:16px; padding:20px;">
+    <div class="card-header">Daten verwalten</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <button class="btn btn-primary btn-sm" onclick="exportCSV()">↑ Als CSV exportieren</button>
+      <button class="btn btn-primary btn-sm" onclick="exportJSON()">↑ Als JSON exportieren</button>
+      <button class="btn btn-danger btn-sm" onclick="clearAllData()">✕ Alle Daten löschen</button>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<footer style="text-align:center;padding:16px;font-family:&#39;Share Tech Mono&#39;,monospace;font-size:10px;color:var(--muted);border-top:1px solid var(--border);position:relative;z-index:10;letter-spacing:2px;">
+  EVE MINING JOURNAL &nbsp;◆&nbsp; CAPSULEER RESOURCE TRACKER &nbsp;◆&nbsp; EVE Online™ ist ein Trademark von CCP hf.
+</footer>
+
+<script>
+// ─────────────── DATA STORE ───────────────
+let entries = [];
+const DEFAULT_MARKET_PRICES_BY_TYPE_ID = {
+  '20': 384,
+  '1224': 26,
+  '1227': 93,
+  '1228': 19,
+  '1230': 10,
+  '16262': 213000,
+  '17452': 149,
+  '17453': 168,
+  '17459': 26,
+  '17460': 29,
+  '17463': 19,
+  '17464': 20,
+  '17470': 10,
+  '17471': 11,
+  '17867': 84,
+  '45490': 214,
+};
+let marketPrices = {};
+let marketSellPrices = {};
+let marketSettings = { salesTaxPct: 3.37, brokerFeePct: 1.4, regionId: 10000043, regionName: 'Domain / Amarr', saleMode: 'seller', priceBasis: 'sell' };
+let salePlans = {};
+let excludedResourceRules = [];
+let sortCol = 'date', sortDir = -1;
+let histPage = 0;
+const PAGE_SIZE = 30;
+
+// Optional PHP/MySQL sync. When opened as file://, use the NAS web endpoint.
+const API_BASE_URL = window.location.protocol === 'file:' ? 'http://bunker.local:8080/api/index.php' : './api/index.php';
+const API_TOKEN = '';
+let remoteSaveTimer = null;
+let remoteSyncEnabled = false;
+
+// ─────────────── COLOR MAP ───────────────
+const ORE_COLORS = {
+  'Veldspar':       '#a78bfa','Veldspar II-Grade':'#c084fc','Veldspar III-Grade':'#e879f9',
+  'Scordite':       '#60a5fa','Scordite II-Grade':'#38bdf8','Scordite III-Grade':'#22d3ee',
+  'Pyroxeres':      '#34d399','Pyroxeres II-Grade':'#4ade80','Pyroxeres III-Grade':'#86efac',
+  'Plagioclase':    '#fbbf24','Plagioclase II-Grade':'#facc15','Plagioclase III-Grade':'#fde047',
+  'Omber':          '#fb923c','Omber II-Grade':'#f97316','Omber III-Grade':'#ea580c',
+  'Kernite':        '#e879f9','Kernite II-Grade':'#d946ef','Kernite III-Grade':'#c026d3',
+  'Jaspet':         '#f87171','Jaspet II-Grade':'#ef4444','Hemorphite':'#fca5a5',
+  'Hedbergite':     '#f472b6','Gneiss':'#c084fc','Dark Ochre':'#94a3b8',
+  'Crokite':        '#2dd4bf','Spodumain':'#a3e635','Bistot':'#facc15',
+  'Arkonor':        '#ff6b6b','Mercoxit':'#00f5d4',
+  'Clear Icicle':   '#bfdbfe','Blue Ice':'#93c5fd','White Glaze':'#e0f2fe',
+  'Glacial Mass':   '#dbeafe','Glare Crust':'#cffafe','Dark Glitter':'#a5f3fc',
+  'Gelidus':        '#6ee7b7','Krystallos':'#d1fae5',
+  'Zeolites':       '#fde68a','Sylvite':'#fcd34d','Bitumens':'#d97706',
+  'Coesite':        '#a16207','Cobaltite':'#b45309',
+};
+
+function getColor(ore) {
+  if (ORE_COLORS[ore]) return ORE_COLORS[ore];
+  let h = 0;
+  for (let c of (ore||'')) h = (h*31 + c.charCodeAt(0)) & 0xffff;
+  return `hsl(${h%360},65%,60%)`;
+}
+
+// ─────────────── PARSE EVE LOCALIZED ───────────────
+function parseLocalized(str) {
+  str = String(str || '').trim();
+  const m = str.match(/hint="([^"]+)"/);
+  if (m) return m[1];
+  // Strip asterisk suffix from text content
+  const plain = str.replace(/<[^>]+>/g, '').replace(/\*$/, '').trim();
+  return plain || str;
+}
+
+function parseEveDate(s) {
+  // "2026.04.19" → "2026-04-19"
+  return s ? s.trim().replace(/\./g, '-') : '';
+}
+
+function parseNum(s) {
+  if (!s && s !== 0) return 0;
+  return parseFloat(String(s).replace(/\s/g,'').replace(',','.')) || 0;
+}
+
+// ─────────────── FORMAT ───────────────
+function fISK(v) {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  const a = Math.abs(v);
+  if (a >= 1e9) return (v/1e9).toFixed(2)+' B';
+  if (a >= 1e6) return (v/1e6).toFixed(2)+' M';
+  if (a >= 1e3) return (v/1e3).toFixed(0)+' K';
+  return Math.round(v).toLocaleString('de-DE');
+}
+function fISKFull(v) {
+  return fISK(v) + ' ISK';
+}
+function fNum(v) {
+  if (!v && v !== 0) return '—';
+  if (v >= 1e6) return (v/1e6).toFixed(2)+'M';
+  if (v >= 1e3) return (v/1e3).toFixed(1)+'K';
+  return v.toLocaleString('de-DE');
+}
+function fVol(v) {
+  if (!v && v !== 0) return '—';
+  if (v >= 1e6) return (v/1e6).toFixed(2)+'M m³';
+  if (v >= 1e3) return (v/1e3).toFixed(1)+'K m³';
+  return v.toFixed(1)+' m³';
+}
+function getPilot(e) {
+  return (e?.pilot || 'Unbekannt').trim() || 'Unbekannt';
+}
+const PLAYER_GROUPS_BY_PILOT = {
+  Alvandeus: 'Alvandeus / Alvandea / Alavanda',
+  Alvandea: 'Alvandeus / Alvandea / Alavanda',
+  Alavanda: 'Alvandeus / Alvandea / Alavanda',
+  Kastoro: 'Kastoro / Enoxs',
+  Enoxs: 'Kastoro / Enoxs',
+  Leevi: 'Leevi / Seryna',
+  Seryna: 'Leevi / Seryna',
+};
+function getPlayerGroupName(pilot) {
+  return PLAYER_GROUPS_BY_PILOT[pilot] || pilot || 'Unbekannt';
+}
+function getPlayerGroup(e) {
+  return getPlayerGroupName(getPilot(e));
+}
+function fUnitISK(v) {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  return Math.round(v).toLocaleString('de-DE') + ' ISK';
+}
+function fUnitISKPrecise(v) {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  return Number(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ISK';
+}
+function fInputAmount(v) {
+  const n = parseMarketNum(v);
+  return n > 0 ? Math.round(n).toLocaleString('de-DE') : '';
+}
+function formatAmountInput(input) {
+  if (!input) return;
+  input.value = fInputAmount(input.value);
+}
+function getSalesFeeRate() {
+  return getMarketFeeRate('seller');
+}
+function escAttr(v) {
+  return String(v ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─────────────── EXCLUDED QUEST RESOURCES ───────────────
+function normalizeResourceRule(value) {
+  return String(value ?? '').trim().toLowerCase();
+}
+function isExcludedResourceEntry(e) {
+  if (!excludedResourceRules.length) return false;
+  const ore = normalizeResourceRule(e.ore);
+  const oreId = normalizeResourceRule(e.oreId);
+  return excludedResourceRules.some(rule => rule && (rule === ore || rule === oreId));
+}
+function loadExcludedResources() {
+  try {
+    const saved = localStorage.getItem('eveMiningExcludedResources');
+    excludedResourceRules = saved ? JSON.parse(saved) : [];
+  } catch(e) {
+    excludedResourceRules = [];
+  }
+  const input = document.getElementById('excludedResourcesInput');
+  if (input) input.value = excludedResourceRules.join('\n');
+}
+function persistExcludedResources() {
+  try { localStorage.setItem('eveMiningExcludedResources', JSON.stringify(excludedResourceRules)); } catch(e){}
+}
+function readExcludedResourcesFromUI() {
+  const input = document.getElementById('excludedResourcesInput');
+  excludedResourceRules = (input?.value || '')
+    .split(/\r?\n/)
+    .map(normalizeResourceRule)
+    .filter(Boolean);
+  excludedResourceRules = [...new Set(excludedResourceRules)].sort();
+}
+function saveExcludedResources() {
+  readExcludedResourcesFromUI();
+  persistExcludedResources();
+  scheduleRemoteSave();
+  const input = document.getElementById('excludedResourcesInput');
+  if (input) input.value = excludedResourceRules.join('\n');
+  const removed = purgeExcludedEntries();
+  saveData();
+  updateAll();
+  showMsg('ok', `✓ Ausschlussliste gespeichert${removed ? ` und ${removed} vorhandene Einträge entfernt` : ''}.`);
+}
+function purgeExcludedEntries() {
+  const before = entries.length;
+  entries = entries.filter(e => !isExcludedResourceEntry(e));
+  return before - entries.length;
+}
+function removeExcludedEntries() {
+  readExcludedResourcesFromUI();
+  persistExcludedResources();
+  scheduleRemoteSave();
+  const removed = purgeExcludedEntries();
+  saveData();
+  updateAll();
+  showMsg(removed ? 'ok' : 'err', removed ? `✓ ${removed} ausgeschlossene Einträge entfernt.` : 'Keine passenden Einträge für die Ausschlussliste gefunden.');
+}
+
+// ─────────────── MARKET PRICES ───────────────
+function parseMarketNum(s) {
+  if (!s && s !== 0) return 0;
+  let raw = String(s).trim().replace(/isk/ig, '').replace(/\s/g, '');
+  if (!raw) return 0;
+  const lastDot = raw.lastIndexOf('.');
+  const lastComma = raw.lastIndexOf(',');
+  if (lastDot >= 0 && lastComma >= 0) {
+    raw = lastComma > lastDot ? raw.replace(/\./g, '').replace(',', '.') : raw.replace(/,/g, '');
+  } else if (/^\d{1,3}(\.\d{3})+$/.test(raw)) {
+    raw = raw.replace(/\./g, '');
+  } else if ((raw.match(/\./g) || []).length > 1) {
+    raw = raw.replace(/\./g, '');
+  } else if (raw.includes(',')) {
+    raw = raw.replace(',', '.');
+  }
+  return parseFloat(raw) || 0;
+}
+function activeMarketMode() {
+  return marketSettings.saleMode || (marketSettings.priceBasis === 'buy' ? 'instant' : 'seller');
+}
+function getMarketUnitPrice(ore, mode = activeMarketMode()) {
+  const source = mode === 'seller' ? marketSellPrices : marketPrices;
+  const v = Number(source[ore]);
+  return Number.isFinite(v) && v > 0 ? v : null;
+}
+function getMarketFeeRate(mode = activeMarketMode()) {
+  const sales = Number(marketSettings.salesTaxPct) || 0;
+  const broker = Number(marketSettings.brokerFeePct) || 0;
+  const total = mode === 'seller' ? sales + broker : sales;
+  return Math.max(0, Math.min(100, total)) / 100;
+}
+function netMarketUnitPrice(ore, mode = activeMarketMode()) {
+  const unit = getMarketUnitPrice(ore, mode);
+  return unit ? unit * (1 - getMarketFeeRate(mode)) : null;
+}
+function effectivePrice(e) {
+  const unit = netMarketUnitPrice(e.ore);
+  return unit ? e.amount * unit : e.price;
+}
+function effectiveResPrice(e) {
+  const unit = netMarketUnitPrice(e.ore);
+  return unit ? e.resAmount * unit : e.resPrice;
+}
+function hasMarketOverride(e) {
+  return netMarketUnitPrice(e.ore) !== null;
+}
+function getMarketRows() {
+  const rows = {};
+  entries.forEach(e => {
+    if (!rows[e.ore]) rows[e.ore] = { ore:e.ore, oreId:e.oreId, amount:0, price:0 };
+    if (!rows[e.ore].oreId && e.oreId) rows[e.ore].oreId = e.oreId;
+    rows[e.ore].amount += e.amount;
+    rows[e.ore].price += e.price;
+  });
+  return Object.values(rows).sort((a,b)=>a.ore.localeCompare(b.ore));
+}
+function applyDefaultMarketPrices() {
+  let changed = false;
+  entries.forEach(e => {
+    const defaultPrice = DEFAULT_MARKET_PRICES_BY_TYPE_ID[e.oreId];
+    if (defaultPrice && !marketSellPrices[e.ore]) {
+      marketSellPrices[e.ore] = defaultPrice;
+      changed = true;
+    }
+  });
+  if (changed) saveMarketPriceData();
+}
+function renderMarketPrices() {
+  const body = document.getElementById('marketPriceBody');
+  if (!body) return;
+  const salesInput = document.getElementById('salesTaxPct');
+  const brokerInput = document.getElementById('brokerFeePct');
+  const regionInput = document.getElementById('marketRegion');
+  const modeInput = document.getElementById('marketSaleMode');
+  if (salesInput) salesInput.value = marketSettings.salesTaxPct || '';
+  if (brokerInput) brokerInput.value = marketSettings.brokerFeePct || '';
+  if (regionInput) regionInput.value = String(marketSettings.regionId || 10000043);
+  if (modeInput) modeInput.value = activeMarketMode();
+  const feeTotal = document.getElementById('marketFeeTotal');
+  if (feeTotal) feeTotal.textContent = ((getMarketFeeRate(activeMarketMode()) * 100).toFixed(1)).replace('.', ',') + '%';
+  const regionLabel = document.getElementById('marketRegionLabel');
+  if (regionLabel) regionLabel.textContent = marketSettings.regionName || 'Domain / Amarr';
+  applyDefaultMarketPrices();
+  const rows = getMarketRows();
+  body.innerHTML = rows.map(r => {
+    const ledgerUnit = r.amount > 0 ? r.price / r.amount : 0;
+    const instantUnit = getMarketUnitPrice(r.ore, 'instant');
+    const sellerUnit = getMarketUnitPrice(r.ore, 'seller');
+    const instantNetUnit = netMarketUnitPrice(r.ore, 'instant');
+    const sellerNetUnit = netMarketUnitPrice(r.ore, 'seller');
+    const netUnit = netMarketUnitPrice(r.ore);
+    const diff = netUnit && ledgerUnit ? ((netUnit / ledgerUnit) - 1) * 100 : null;
+    const diffTxt = diff === null ? '—' : `${diff >= 0 ? '+' : ''}${diff.toFixed(1)}%`;
+    const diffColor = diff === null ? 'var(--muted)' : diff >= 0 ? 'var(--green)' : 'var(--red)';
+    const sourceTxt = netUnit ? (activeMarketMode() === 'seller' ? 'Eigene Sell-Order' : 'Sofortverkauf') : 'Ledger';
+    return `<tr>
+      <td><span class="ore-badge" style="background:${getColor(r.ore)}22;color:${getColor(r.ore)};border:1px solid ${getColor(r.ore)}44">${r.ore}</span></td>
+      <td>${fUnitISK(ledgerUnit)}</td>
+      <td><input class="price-input" data-price-kind="instant" data-ore="${escAttr(r.ore)}" value="${instantUnit ?? ''}" placeholder="Buy Ø ISK/Stück">${instantNetUnit ? `<div class="market-source">Netto nur Steuer: ${fUnitISK(instantNetUnit)}</div>` : ''}</td>
+      <td><input class="price-input" data-price-kind="seller" data-ore="${escAttr(r.ore)}" value="${sellerUnit ?? ''}" placeholder="${r.oreId && DEFAULT_MARKET_PRICES_BY_TYPE_ID[r.oreId] ? fUnitISK(DEFAULT_MARKET_PRICES_BY_TYPE_ID[r.oreId]) : 'Sell Ø ISK/Stück'}">${sellerNetUnit ? `<div class="market-source">Netto Steuer + Broker: ${fUnitISK(sellerNetUnit)}</div>` : ''}</td>
+      <td style="color:${diffColor}">${diffTxt}</td>
+      <td><span class="market-source">${sourceTxt}</span></td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:20px;">Keine Ressourcen geladen</td></tr>`;
+}
+function saveMarketPriceData() {
+  try {
+    localStorage.setItem('eveMiningMarketPrices', JSON.stringify(marketPrices));
+    localStorage.setItem('eveMiningMarketSellPrices', JSON.stringify(marketSellPrices));
+    localStorage.setItem('eveMiningMarketSettings', JSON.stringify(marketSettings));
+  } catch(e){}
+  scheduleRemoteSave();
+}
+function loadMarketPriceData() {
+  try {
+    const d = localStorage.getItem('eveMiningMarketPrices');
+    if (d) marketPrices = JSON.parse(d) || {};
+    const sd = localStorage.getItem('eveMiningMarketSellPrices');
+    if (sd) marketSellPrices = JSON.parse(sd) || {};
+    const s = localStorage.getItem('eveMiningMarketSettings');
+    if (s) marketSettings = { ...marketSettings, ...(JSON.parse(s) || {}) };
+    if (!marketSettings.saleMode) marketSettings.saleMode = marketSettings.priceBasis === 'buy' ? 'instant' : 'seller';
+    if (Object.keys(marketSellPrices).length === 0 && Object.keys(marketPrices).length > 0) {
+      marketSellPrices = { ...marketPrices };
+    }
+  } catch(e) { marketPrices = {}; }
+}
+function showMarketMsg(type, text) {
+  const el = document.getElementById('marketMsg');
+  if (!el) return;
+  el.className = 'msg-box ' + (type === 'ok' ? 'msg-ok' : 'msg-err');
+  el.textContent = text;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 5000);
+}
+function normalizeImportKey(value) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/^\uFEFF/, '')
+    .replace(/[^a-z0-9äöüß]+/g, '');
+}
+function pickImportValue(row, keys) {
+  const wanted = keys.map(normalizeImportKey);
+  for (const [key, value] of Object.entries(row || {})) {
+    if (wanted.includes(normalizeImportKey(key))) return value;
+  }
+  return '';
+}
+function splitMarketPriceLine(line, delimiter) {
+  const cells = [];
+  let cell = '';
+  let quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    const next = line[i + 1];
+    if (ch === '"' && quoted && next === '"') {
+      cell += '"';
+      i++;
+    } else if (ch === '"') {
+      quoted = !quoted;
+    } else if (ch === delimiter && !quoted) {
+      cells.push(cell.trim());
+      cell = '';
+    } else {
+      cell += ch;
+    }
+  }
+  cells.push(cell.trim());
+  return cells;
+}
+function detectMarketDelimiter(line) {
+  const candidates = ['\t', ';', ','];
+  return candidates
+    .map(d => ({ d, count: splitMarketPriceLine(line, d).length }))
+    .sort((a,b)=>b.count-a.count)[0]?.d || ';';
+}
+function marketPriceRowsFromText(text) {
+  const lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return [];
+  const delimiter = detectMarketDelimiter(lines[0]);
+  const first = splitMarketPriceLine(lines[0], delimiter);
+  const firstKeys = first.map(normalizeImportKey);
+  const hasHeader = firstKeys.some(k => ['ressource','erz','ore','typeid','oreid','preis','price','marktpreis','30tpreis','buy','sell','averagebuy','averagesell'].includes(k));
+  const header = hasHeader ? first : (first.length === 2 ? ['ore', 'price'] : ['ore', 'typeId', 'price']);
+  const rows = (hasHeader ? lines.slice(1) : lines).map(line => {
+    const cells = splitMarketPriceLine(line, delimiter);
+    return Object.fromEntries(header.map((h, i) => [h, cells[i] ?? '']));
+  });
+  return rows;
+}
+function marketPriceRowsFromJson(text) {
+  const parsed = JSON.parse(text);
+  if (Array.isArray(parsed)) return { rows: parsed, settings: null };
+  if (parsed && typeof parsed === 'object') {
+    if (parsed.marketSettings && typeof parsed.marketSettings === 'object') {
+      const source = Array.isArray(parsed.items)
+        ? parsed.items
+        : { marketPrices: parsed.marketPrices || parsed.prices || {}, marketSellPrices: parsed.marketSellPrices || {} };
+      const nested = marketPriceRowsFromJson(JSON.stringify(source));
+      return { rows: nested.rows, settings: parsed.marketSettings };
+    }
+    if (Array.isArray(parsed.items)) return { rows: parsed.items, settings: parsed.settings || null };
+    if (Array.isArray(parsed.prices)) return { rows: parsed.prices, settings: parsed.settings || null };
+    if (parsed.prices && typeof parsed.prices === 'object') {
+      return { rows: Object.entries(parsed.prices).map(([ore, price]) => ({ ore, price })), settings: parsed.settings || null };
+    }
+    if (parsed.marketPrices && typeof parsed.marketPrices === 'object') {
+      const sellMap = parsed.marketSellPrices || {};
+      const ores = new Set([...Object.keys(parsed.marketPrices), ...Object.keys(sellMap)]);
+      return { rows: [...ores].map(ore => ({ ore, buy: parsed.marketPrices[ore], sell: sellMap[ore] })), settings: parsed.marketSettings || parsed.settings || null };
+    }
+    return { rows: Object.entries(parsed).map(([ore, price]) => ({ ore, price })), settings: null };
+  }
+  return { rows: [], settings: null };
+}
+function applyImportedMarketRows(rows, settings = null) {
+  const marketRows = getMarketRows();
+  const oreByTypeId = Object.fromEntries(marketRows.filter(r=>r.oreId).map(r=>[String(r.oreId), r.ore]));
+  const knownOres = new Set(marketRows.map(r=>r.ore));
+  const importedInstant = {};
+  const importedSeller = {};
+  const skipped = [];
+
+  rows.forEach(row => {
+    const ore = String(pickImportValue(row, ['ore', 'erz', 'ressource', 'resource', 'name']) || '').trim();
+    const typeId = String(pickImportValue(row, ['typeId', 'type_id', 'oreId', 'erzartId', 'type']) || '').trim();
+    const rawInstantPrice = pickImportValue(row, [
+      'buy', 'buyPrice', 'averageBuy', 'averageBy', 'avgBuy', 'buyAvg', 'sofortverkauf',
+      'instant', 'instantPrice', 'Buy_ISK_pro_Stueck', 'Buy ISK pro Stück',
+      '30T_Buy_ISK_pro_Stueck', '30T Buy ISK pro Stück'
+    ]);
+    const rawSellerPrice = pickImportValue(row, [
+      'sell', 'sellPrice', 'averageSell', 'avgSell', 'sellAvg', 'seller', 'sellerPrice',
+      'eigeneSellOrder', 'Sell_ISK_pro_Stueck', 'Sell ISK pro Stück',
+      '30T_Sell_ISK_pro_Stueck', '30T Sell ISK pro Stück',
+      'price', 'preis', 'marketPrice', 'marktpreis', 'avg', 'average',
+      '30d', '30t', '30tpreis', '30dprice', '30T_Preis_ISK_pro_Stueck',
+      '30T Ø Marktpreis / Stück', 'iskPerUnit', 'iskProStueck'
+    ]);
+    const instantPrice = parseMarketNum(rawInstantPrice);
+    const sellerPrice = parseMarketNum(rawSellerPrice);
+    const targetOre = knownOres.has(ore) ? ore : oreByTypeId[typeId];
+
+    if (targetOre && (instantPrice > 0 || sellerPrice > 0)) {
+      if (instantPrice > 0) importedInstant[targetOre] = instantPrice;
+      if (sellerPrice > 0) importedSeller[targetOre] = sellerPrice;
+    } else if (ore || typeId || rawInstantPrice || rawSellerPrice) {
+      skipped.push(ore || typeId || 'Unbekannt');
+    }
+  });
+
+  if (settings && typeof settings === 'object') {
+    marketSettings = { ...marketSettings, ...settings };
+  }
+  marketPrices = { ...marketPrices, ...importedInstant };
+  marketSellPrices = { ...marketSellPrices, ...importedSeller };
+  saveMarketPriceData();
+  updateAll();
+
+  const count = new Set([...Object.keys(importedInstant), ...Object.keys(importedSeller)]).size;
+  const skippedTxt = skipped.length ? ` ${skipped.length} Zeilen wurden übersprungen, weil Ressource/TypeID nicht zu den importierten Miningdaten passt oder kein Preis vorhanden war.` : '';
+  showMarketMsg(count ? 'ok' : 'err', count ? `✓ ${count} Marktpreise importiert.${skippedTxt}` : 'Keine passenden Marktpreise gefunden. Prüfe Spaltennamen und Preise.');
+}
+function importMarketPriceFile(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const text = String(reader.result || '');
+      const isJson = file.name.toLowerCase().endsWith('.json') || text.trim().startsWith('{') || text.trim().startsWith('[');
+      if (isJson) {
+        const { rows, settings } = marketPriceRowsFromJson(text);
+        applyImportedMarketRows(rows, settings);
+      } else {
+        applyImportedMarketRows(marketPriceRowsFromText(text));
+      }
+    } catch (err) {
+      showMarketMsg('err', `Marktpreis-Datei konnte nicht gelesen werden: ${err.message}`);
+    } finally {
+      event.target.value = '';
+    }
+  };
+  reader.onerror = () => showMarketMsg('err', 'Marktpreis-Datei konnte nicht gelesen werden.');
+  reader.readAsText(file, 'utf-8');
+}
+function exportMarketPriceTemplate() {
+  syncMarketSettingsFromUI();
+  const rows = getMarketRows();
+  if (!rows.length) {
+    showMarketMsg('err', 'Importiere zuerst Mining-Ledger-Daten, damit eine Marktpreis-Vorlage für die vorhandenen Ressourcen erstellt werden kann.');
+    return;
+  }
+  const header = 'Ressource\tTypeID\tBuy_ISK_pro_Stueck\tSell_ISK_pro_Stueck\tRegion\tAktive_Abrechnung';
+  const lines = rows.map(r => [
+    r.ore,
+    r.oreId || '',
+    getMarketUnitPrice(r.ore, 'instant') ?? '',
+    getMarketUnitPrice(r.ore, 'seller') ?? DEFAULT_MARKET_PRICES_BY_TYPE_ID[r.oreId] ?? '',
+    marketSettings.regionName || 'Domain / Amarr',
+    activeMarketMode(),
+  ].join('\t'));
+  download('eve-market-prices-template.tsv', [header, ...lines].join('\n'));
+  showMarketMsg('ok', '✓ Marktpreis-Vorlage exportiert.');
+}
+function saveMarketPricesFromUI() {
+  const nextInstant = {};
+  const nextSeller = {};
+  document.querySelectorAll('#marketPriceBody input[data-ore]').forEach(input => {
+    const value = parseMarketNum(input.value);
+    if (value > 0 && input.dataset.priceKind === 'seller') nextSeller[input.dataset.ore] = value;
+    if (value > 0 && input.dataset.priceKind === 'instant') nextInstant[input.dataset.ore] = value;
+  });
+  marketPrices = nextInstant;
+  marketSellPrices = nextSeller;
+  syncMarketSettingsFromUI();
+  saveMarketPriceData();
+  updateAll();
+  showMarketMsg('ok', '✓ Marktpreise gespeichert. Dashboard wurde neu berechnet.');
+}
+async function refreshMarketPricesFromApi() {
+  if (!API_BASE_URL) {
+    showMarketMsg('err', 'PHP-API ist noch nicht verbunden. Trage oben im Script API_BASE_URL ein, damit EVE-Tycoon-Preise geladen werden können.');
+    return;
+  }
+  syncMarketSettingsFromUI();
+  const items = getMarketRows()
+    .filter(r => r.oreId)
+    .map(r => ({ ore: r.ore, oreId: r.oreId }));
+  if (!items.length) {
+    showMarketMsg('err', 'Keine Ressourcen mit Type-ID gefunden. Importiere zuerst Mining-Ledger-Daten.');
+    return;
+  }
+
+  showMarketMsg('ok', 'EVE-Tycoon-Preise werden geladen...');
+  try {
+    const res = await fetch(apiUrl('market-prices'), {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify({
+        regionId: marketSettings.regionId || 10000043,
+        items,
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const payload = await res.json();
+    if (!payload.ok || !payload.data) {
+      throw new Error(payload.error || 'Ungültige API-Antwort');
+    }
+
+    const buyPrices = payload.data.buyPrices || {};
+    const sellPrices = payload.data.sellPrices || {};
+    marketPrices = { ...marketPrices, ...buyPrices };
+    marketSellPrices = { ...marketSellPrices, ...sellPrices };
+    saveMarketPriceData();
+    updateAll();
+    const buyCount = Object.keys(buyPrices).length;
+    const sellCount = Object.keys(sellPrices).length;
+    const errors = payload.data.errors?.length ? ` (${payload.data.errors.length} ohne Preis)` : '';
+    showMarketMsg('ok', `✓ ${buyCount} Buy-Preise und ${sellCount} Sell-Preise von EVE Tycoon aktualisiert${errors}.`);
+  } catch (err) {
+    showMarketMsg('err', `EVE-Tycoon-Preise konnten nicht geladen werden: ${err.message}`);
+  }
+}
+function syncMarketSettingsFromUI() {
+  marketSettings.salesTaxPct = Math.max(0, parseMarketNum(document.getElementById('salesTaxPct')?.value || 0));
+  marketSettings.brokerFeePct = Math.max(0, parseMarketNum(document.getElementById('brokerFeePct')?.value || 0));
+  const region = document.getElementById('marketRegion');
+  const mode = document.getElementById('marketSaleMode');
+  if (region) {
+    marketSettings.regionId = parseInt(region.value, 10) || 10000043;
+    marketSettings.regionName = region.options[region.selectedIndex]?.textContent || 'Domain / Amarr';
+  }
+  if (mode) marketSettings.saleMode = mode.value || 'seller';
+  marketSettings.priceBasis = marketSettings.saleMode === 'instant' ? 'buy' : 'sell';
+}
+function clearMarketPrices() {
+  marketPrices = {};
+  marketSellPrices = {};
+  saveMarketPriceData();
+  updateAll();
+  showMarketMsg('ok', '✓ Marktpreise geleert. Ledger-Werte sind wieder aktiv.');
+}
+
+// ─────────────── PLANNED SALES LOTS ───────────────
+const SALES_GROUPS = [
+  { id:'alvandeus', label:'Alvandeus / Alvandea / Alavanda', short:'Alv' },
+  { id:'kastoro', label:'Kastoro / Enoxs', short:'Kas' },
+  { id:'leevi', label:'Leevi / Seryna', short:'Lee' },
+];
+const SALES_MATERIALS = [
+  { typeId:34, name:'Tritanium' },
+  { typeId:35, name:'Pyerite' },
+  { typeId:36, name:'Mexallon' },
+  { typeId:37, name:'Isogen' },
+  { typeId:38, name:'Nocxium' },
+  { typeId:39, name:'Zydrine' },
+  { typeId:40, name:'Megacyte' },
+  { typeId:11399, name:'Morphite' },
+  { typeId:16272, name:'Heavy Water' },
+  { typeId:16273, name:'Liquid Ozone' },
+  { typeId:16274, name:'Helium Isotopes' },
+  { typeId:16275, name:'Strontium Clathrates' },
+  { typeId:17887, name:'Oxygen Isotopes' },
+  { typeId:17888, name:'Nitrogen Isotopes' },
+  { typeId:17889, name:'Hydrogen Isotopes' },
+];
+function showSalesMsg(type, text) {
+  const el = document.getElementById('salesMsg');
+  if (!el) return;
+  el.className = 'msg-box ' + (type === 'ok' ? 'msg-ok' : 'msg-err');
+  el.textContent = text;
+  el.style.display = 'block';
+}
+function saveSalePlanData() {
+  try { localStorage.setItem('eveMiningSalePlans', JSON.stringify(salePlans)); } catch(e){}
+  scheduleRemoteSave();
+}
+function loadSalePlanData() {
+  try {
+    const saved = localStorage.getItem('eveMiningSalePlans');
+    salePlans = saved ? JSON.parse(saved) || {} : {};
+    if (salePlans.isogen && !salePlans.materials?.['37']) {
+      salePlans = {
+        ...salePlans,
+        materials: {
+          ...(salePlans.materials || {}),
+          '37': {
+            ...salePlans.isogen,
+            avgSell20d: salePlans.isogen.avgSell10d,
+            avgSell20dAt: salePlans.isogen.avgSell10dAt,
+          }
+        }
+      };
+      delete salePlans.isogen;
+    }
+  } catch(e) {
+    salePlans = {};
+  }
+}
+function salesPlanFor(typeId) {
+  return salePlans.materials?.[String(typeId)] || {};
+}
+function currentSalesPlansFromUI() {
+  const materials = {};
+  SALES_MATERIALS.forEach(material => {
+    const key = String(material.typeId);
+    const previous = salesPlanFor(material.typeId);
+    const soloAmounts = {};
+    SALES_GROUPS.forEach(group => {
+      soloAmounts[group.id] = parseMarketNum(document.querySelector(`[data-sale-material="${key}"][data-sale-solo-group="${group.id}"]`)?.value || 0);
+    });
+    const fleetGroups = SALES_GROUPS
+      .filter(group => document.querySelector(`[data-sale-material="${key}"][data-sale-fleet-group="${group.id}"]`)?.checked)
+      .map(group => group.id);
+    materials[key] = {
+      ...previous,
+      actualPrice: parseMarketNum(document.querySelector(`[data-sale-material="${key}"][data-sale-field="actualPrice"]`)?.value || 0),
+      soloAmounts,
+      fleetAmount: parseMarketNum(document.querySelector(`[data-sale-material="${key}"][data-sale-field="fleetAmount"]`)?.value || 0),
+      fleetGroups,
+      note: document.querySelector(`[data-sale-material="${key}"][data-sale-field="note"]`)?.value?.trim() || '',
+    };
+  });
+  return { ...(salePlans || {}), materials };
+}
+function renderSalesMaterialsTable() {
+  const body = document.getElementById('salesMaterialsBody');
+  if (!body) return;
+  body.innerHTML = SALES_MATERIALS.map(material => {
+    const key = String(material.typeId);
+    const plan = salesPlanFor(material.typeId);
+    const avg5 = plan.avgSell5d ? fUnitISKPrecise(plan.avgSell5d) : '—';
+    const avg20 = plan.avgSell20d ? fUnitISKPrecise(plan.avgSell20d) : '—';
+    const rangeLabel = (dates, fallback) => {
+      if (Array.isArray(dates) && dates.length) return dates.length > 1 ? `${dates[0]} bis ${dates[dates.length - 1]}` : dates[0];
+      return fallback ? `Stand: ${fallback}` : '';
+    };
+    const meta5 = rangeLabel(plan.avgSell5dDates, plan.avgSell5dAt);
+    const meta20 = rangeLabel(plan.avgSell20dDates, plan.avgSell20dAt);
+    const soloInputs = SALES_GROUPS.map(group => {
+      const soloValue = plan.soloAmounts?.[group.id] ?? plan.amounts?.[group.id] ?? '';
+      return `<td><input class="price-input" data-sale-material="${key}" data-sale-solo-group="${group.id}" value="${fInputAmount(soloValue)}" placeholder="Solo" oninput="renderSalesPayoutCards()" onblur="formatAmountInput(this);renderSalesPayoutCards()"></td>`;
+    }).join('');
+    const fleetGroups = Array.isArray(plan.fleetGroups) ? plan.fleetGroups : SALES_GROUPS.map(group => group.id);
+    const fleetChecks = SALES_GROUPS.map(group => `<label class="market-source" style="display:inline-flex;align-items:center;gap:4px;margin-right:8px;white-space:nowrap;"><input type="checkbox" data-sale-material="${key}" data-sale-fleet-group="${group.id}" ${fleetGroups.includes(group.id) ? 'checked' : ''} onchange="renderSalesPayoutCards()">${group.short}</label>`).join('');
+    const col = getColor(material.name);
+    return `<tr>
+      <td><span class="ore-badge" style="background:${col}22;color:${col};border:1px solid ${col}44">${material.name}</span></td>
+      <td>${material.typeId}</td>
+      <td><span style="color:var(--gold)">${avg5}</span><div class="market-source">${meta5}</div></td>
+      <td><span style="color:var(--cyan)">${avg20}</span><div class="market-source">${meta20}</div></td>
+      <td><input class="price-input" data-sale-material="${key}" data-sale-field="actualPrice" value="${plan.actualPrice || ''}" placeholder="ISK/Stück, z.B. 3,66" oninput="renderSalesPayoutCards()"></td>
+      ${soloInputs}
+      <td><input class="price-input" data-sale-material="${key}" data-sale-field="fleetAmount" value="${fInputAmount(plan.fleetAmount)}" placeholder="Flotte" oninput="renderSalesPayoutCards()" onblur="formatAmountInput(this);renderSalesPayoutCards()"></td>
+      <td>${fleetChecks}</td>
+      <td><input class="price-input" data-sale-material="${key}" data-sale-field="note" value="${escAttr(plan.note || '')}" placeholder="z.B. 7 Tage" style="width:180px;"></td>
+    </tr>`;
+  }).join('');
+}
+function renderSalesPayoutCards() {
+  const wrap = document.getElementById('salesPayoutCards');
+  if (!wrap) return;
+  const current = currentSalesPlansFromUI();
+  const feeRate = getSalesFeeRate();
+  wrap.innerHTML = SALES_GROUPS.map(group => {
+    const gross = SALES_MATERIALS.reduce((sum, material) => {
+      const plan = current.materials?.[String(material.typeId)] || {};
+      const soloAmount = plan.soloAmounts?.[group.id] || 0;
+      const fleetGroups = Array.isArray(plan.fleetGroups) ? plan.fleetGroups : [];
+      const fleetShare = fleetGroups.includes(group.id) && fleetGroups.length > 0 ? (plan.fleetAmount || 0) / fleetGroups.length : 0;
+      return sum + ((soloAmount + fleetShare) * (plan.actualPrice || 0));
+    }, 0);
+    const payout = gross * (1 - feeRate);
+    const fee = gross - payout;
+    const materialCount = SALES_MATERIALS.reduce((count, material) => {
+      const plan = current.materials?.[String(material.typeId)] || {};
+      const soloAmount = plan.soloAmounts?.[group.id] || 0;
+      const fleetGroups = Array.isArray(plan.fleetGroups) ? plan.fleetGroups : [];
+      const hasFleetShare = fleetGroups.includes(group.id) && (plan.fleetAmount || 0) > 0;
+      return count + (soloAmount > 0 || hasFleetShare ? 1 : 0);
+    }, 0);
+    return `<div class="card stat-card">
+      <div class="s-icon">◉</div>
+      <div class="s-label">${group.label}</div>
+      <div class="s-value" style="color:${payout > 0 ? 'var(--green)' : 'var(--muted)'}">${fISKFull(payout)}</div>
+      <div class="s-sub">${materialCount} Materialien · Gebühren ${fISKFull(fee)}</div>
+    </div>`;
+  }).join('');
+}
+function renderSalesPage() {
+  const feeLabel = document.getElementById('salesFeeLabel');
+  if (feeLabel) feeLabel.textContent = ((getSalesFeeRate() * 100).toFixed(2)).replace('.', ',') + '%';
+  renderSalesMaterialsTable();
+  renderSalesPayoutCards();
+}
+function saveSalePlansFromUI() {
+  salePlans = currentSalesPlansFromUI();
+  saveSalePlanData();
+  renderSalesPage();
+  showSalesMsg('ok', '✓ Verkaufsposten gespeichert.');
+}
+function clearSalePlans() {
+  salePlans = {};
+  saveSalePlanData();
+  renderSalesPage();
+  showSalesMsg('ok', '✓ Verkaufsposten geleert.');
+}
+async function refreshSalesMaterialAverages() {
+  if (!API_BASE_URL) {
+    showSalesMsg('err', 'PHP-API ist noch nicht verbunden.');
+    return;
+  }
+  showSalesMsg('ok', '5T und 20T Durchschnitte werden geladen...');
+  try {
+    const current = currentSalesPlansFromUI();
+    const nextMaterials = { ...(current.materials || {}) };
+    let updated = 0;
+    for (const material of SALES_MATERIALS) {
+      const key = String(material.typeId);
+      const loadAverage = async (days) => {
+        const res = await fetch(apiUrl('sales-material-history'), {
+          method: 'POST',
+          headers: apiHeaders(),
+          body: JSON.stringify({ regionId: 10000043, typeId: material.typeId, days }),
+        });
+        if (!res.ok) throw new Error(`${material.name}: HTTP ${res.status}`);
+        const payload = await res.json();
+        if (!payload.ok || !payload.data) throw new Error(`${material.name}: ${payload.error || 'Ungültige API-Antwort'}`);
+        return payload.data;
+      };
+      const avg5 = await loadAverage(5);
+      const avg20 = await loadAverage(20);
+      nextMaterials[key] = {
+        ...(nextMaterials[key] || {}),
+        avgSell5d: avg5.avgSell,
+        avgSell5dAt: avg5.fetchedAt,
+        avgSell5dDates: avg5.dates || [],
+        avgSell20d: avg20.avgSell,
+        avgSell20dAt: avg20.fetchedAt,
+        avgSell20dDates: avg20.dates || [],
+      };
+      updated++;
+    }
+    salePlans = { ...current, materials: nextMaterials };
+    saveSalePlanData();
+    renderSalesPage();
+    showSalesMsg('ok', `✓ ${updated} Materialien mit 5T und 20T Ø aktualisiert.`);
+  } catch (err) {
+    showSalesMsg('err', `Durchschnitt konnte nicht geladen werden: ${err.message}`);
+  }
+}
+
+// ─────────────── PARSE LEDGER TEXT ───────────────
+function parseLedger(text, pilot = 'Unbekannt') {
+  const lines = text.trim().split('\n').filter(l => l.trim());
+  const result = [];
+  const cleanPilot = (pilot || 'Unbekannt').trim() || 'Unbekannt';
+  for (const line of lines) {
+    const cols = line.split('\t');
+    if (cols.length < 3) continue;
+    // Skip header line
+    if (/zeitstempel|datum|date/i.test(cols[0])) continue;
+
+    const dateRaw = cols[0]?.trim() || '';
+    if (!/^\d{4}[.\-]\d{2}[.\-]\d{2}/.test(dateRaw)) continue;
+
+    const ore       = parseLocalized(cols[1]);
+    const amount    = parseNum(cols[2]);
+    const resAmount = parseNum(cols[3]);
+    const volume    = parseNum(cols[4]);
+    const resVol    = parseNum(cols[5]);
+    const price     = parseNum(cols[6]);
+    const resPrice  = parseNum(cols[7]);
+    const system    = parseLocalized(cols[8]);
+    const oreId     = cols[9]?.trim() || '';
+    const sysId     = cols[10]?.trim() || '';
+
+    if (!ore || amount === 0) continue;
+
+    result.push({
+      id: `${dateRaw}_${ore}_${system}_${amount}_${Math.random().toString(36).slice(2,6)}`,
+      date: parseEveDate(dateRaw),
+      pilot: cleanPilot,
+      ore, amount, resAmount,
+      volume, resVol,
+      price, resPrice,
+      system, oreId, sysId,
+    });
+  }
+  return result;
+}
+
+// ─────────────── IMPORT ───────────────
+function doImport() {
+  const text = document.getElementById('importArea').value;
+  const pilot = document.getElementById('importPilot').value.trim() || 'Unbekannt';
+  if (!text.trim()) { showMsg('err', 'Keine Daten eingegeben.'); return; }
+
+  readExcludedResourcesFromUI();
+  persistExcludedResources();
+  const parsedRaw = parseLedger(text, pilot);
+  const parsed = parsedRaw.filter(e => !isExcludedResourceEntry(e));
+  const excluded = parsedRaw.length - parsed.length;
+  if (!parsed.length) {
+    showMsg('err', excluded ? `✗ ${excluded} Einträge wurden durch die Ausschlussliste übersprungen. Es bleiben keine importierbaren Daten übrig.` : '✗ Kein gültiges EVE-Format erkannt. Bitte kopiere direkt aus dem Mining Ledger im Spiel.');
+    return;
+  }
+
+  // Deduplicate by id prefix (date+ore+system+amount)
+  const existingKeys = new Set(entries.map(e => `${getPilot(e)}_${e.date}_${e.ore}_${e.system}_${e.amount}`));
+  const newOnes = parsed.filter(e => !existingKeys.has(`${getPilot(e)}_${e.date}_${e.ore}_${e.system}_${e.amount}`));
+
+  entries.push(...newOnes);
+
+  // Actually: just add new ones and skip dupes
+  const before = entries.length - newOnes.length;
+  const dupes = parsed.length - newOnes.length;
+
+  saveData();
+  showMsg('ok', `✓ ${newOnes.length} Einträge für ${pilot} importiert${dupes > 0 ? ` (${dupes} Duplikate übersprungen)` : ''}${excluded > 0 ? `, ${excluded} Quest-/Ausschluss-Einträge entfernt` : ''}.`);
+  document.getElementById('importArea').value = '';
+  updateAll();
+}
+
+function showMsg(type, text) {
+  const el = document.getElementById('importMsg');
+  el.className = 'msg-box ' + (type === 'ok' ? 'msg-ok' : 'msg-err');
+  el.textContent = text;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 5000);
+}
+
+// ─────────────── LOCAL STORAGE ───────────────
+function saveData() {
+  try { localStorage.setItem('eveMiningJournal', JSON.stringify(entries)); } catch(e){}
+  scheduleRemoteSave();
+}
+function loadData() {
+  try {
+    const d = localStorage.getItem('eveMiningJournal');
+    if (d) entries = JSON.parse(d);
+    entries = entries.map(e => ({ ...e, pilot: getPilot(e) }));
+    if (excludedResourceRules.length) {
+      entries = entries.filter(e => !isExcludedResourceEntry(e));
+    }
+  } catch(e) { entries = []; }
+}
+
+function apiUrl(action) {
+  if (!API_BASE_URL) return '';
+  const sep = API_BASE_URL.includes('?') ? '&' : '?';
+  return `${API_BASE_URL}${sep}action=${encodeURIComponent(action)}`;
+}
+
+function apiHeaders() {
+  const headers = { 'Content-Type': 'application/json' };
+  if (API_TOKEN) headers['X-Api-Token'] = API_TOKEN;
+  return headers;
+}
+
+async function loadRemoteData() {
+  if (!API_BASE_URL) return false;
+  try {
+    const res = await fetch(apiUrl('load'), { headers: apiHeaders() });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const payload = await res.json();
+    if (!payload.ok || !payload.data) throw new Error(payload.error || 'Ungültige API-Antwort');
+
+    if (Array.isArray(payload.data.entries)) {
+      entries = payload.data.entries.map(e => ({ ...e, pilot: getPilot(e) })).filter(e => !isExcludedResourceEntry(e));
+      try { localStorage.setItem('eveMiningJournal', JSON.stringify(entries)); } catch(e){}
+    }
+    if (payload.data.marketPrices && typeof payload.data.marketPrices === 'object') {
+      marketPrices = payload.data.marketPrices;
+      try { localStorage.setItem('eveMiningMarketPrices', JSON.stringify(marketPrices)); } catch(e){}
+    }
+    if (payload.data.marketSellPrices && typeof payload.data.marketSellPrices === 'object') {
+      marketSellPrices = payload.data.marketSellPrices;
+      try { localStorage.setItem('eveMiningMarketSellPrices', JSON.stringify(marketSellPrices)); } catch(e){}
+    }
+    if (payload.data.marketSettings && typeof payload.data.marketSettings === 'object') {
+      marketSettings = { ...marketSettings, ...payload.data.marketSettings };
+      try { localStorage.setItem('eveMiningMarketSettings', JSON.stringify(marketSettings)); } catch(e){}
+    }
+    if (payload.data.salePlans && typeof payload.data.salePlans === 'object') {
+      salePlans = payload.data.salePlans || {};
+      try { localStorage.setItem('eveMiningSalePlans', JSON.stringify(salePlans)); } catch(e){}
+    }
+    if (Array.isArray(payload.data.excludedResources)) {
+      excludedResourceRules = payload.data.excludedResources;
+      persistExcludedResources();
+      const input = document.getElementById('excludedResourcesInput');
+      if (input) input.value = excludedResourceRules.join('\n');
+      entries = entries.filter(e => !isExcludedResourceEntry(e));
+    }
+
+    remoteSyncEnabled = true;
+    return true;
+  } catch (err) {
+    console.warn('Remote sync load failed:', err);
+    remoteSyncEnabled = false;
+    return false;
+  }
+}
+
+function scheduleRemoteSave() {
+  if (!API_BASE_URL) return;
+  clearTimeout(remoteSaveTimer);
+  remoteSaveTimer = setTimeout(saveRemoteData, 600);
+}
+
+async function saveRemoteData() {
+  if (!API_BASE_URL) return false;
+  try {
+    const res = await fetch(apiUrl('save'), {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify({ entries, marketPrices, marketSellPrices, marketSettings, salePlans, excludedResources: excludedResourceRules }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const payload = await res.json();
+    if (!payload.ok) throw new Error(payload.error || 'Speichern fehlgeschlagen');
+    remoteSyncEnabled = true;
+    return true;
+  } catch (err) {
+    console.warn('Remote sync save failed:', err);
+    remoteSyncEnabled = false;
+    return false;
+  }
+}
+
+function clearAllData() {
+  if (!confirm('Wirklich alle Daten löschen?')) return;
+  entries = [];
+  saveData();
+  updateAll();
+  showMsg('ok', '✓ Alle Daten gelöscht.');
+}
+
+// ─────────────── COMPUTE STATS ───────────────
+function computeStats() {
+  applyDefaultMarketPrices();
+  const ledgerTotalPrice    = entries.reduce((s,e)=>s+e.price,0);
+  const ledgerTotalResPrice = entries.reduce((s,e)=>s+e.resPrice,0);
+  const totalPrice    = entries.reduce((s,e)=>s+effectivePrice(e),0);
+  const totalResPrice = entries.reduce((s,e)=>s+effectiveResPrice(e),0);
+  const totalVol      = entries.reduce((s,e)=>s+e.volume,0);
+  const totalResVol   = entries.reduce((s,e)=>s+e.resVol,0);
+  const totalAmount   = entries.reduce((s,e)=>s+e.amount,0);
+  const totalResAmount= entries.reduce((s,e)=>s+e.resAmount,0);
+
+  // By ore
+  const byOre = {};
+  entries.forEach(e => {
+    if (!byOre[e.ore]) byOre[e.ore] = {ore:e.ore, price:0, resPrice:0, volume:0, resVol:0, amount:0, resAmount:0, count:0};
+    byOre[e.ore].price += effectivePrice(e);
+    byOre[e.ore].resPrice += effectiveResPrice(e);
+    byOre[e.ore].volume += e.volume;
+    byOre[e.ore].resVol += e.resVol;
+    byOre[e.ore].amount += e.amount;
+    byOre[e.ore].resAmount += e.resAmount;
+    byOre[e.ore].count++;
+  });
+
+  // By date
+  const byDate = {};
+  entries.forEach(e => {
+    if (!byDate[e.date]) byDate[e.date] = {date:e.date, price:0, resPrice:0, volume:0};
+    byDate[e.date].price += effectivePrice(e);
+    byDate[e.date].resPrice += effectiveResPrice(e);
+    byDate[e.date].volume += e.volume;
+  });
+
+  // By date and pilot/person
+  const byPilotDate = {};
+  entries.forEach(e => {
+    const date = e.date || 'Unbekannt';
+    const pilot = getPilot(e);
+    if (!byPilotDate[date]) byPilotDate[date] = { date, pilots:{} };
+    byPilotDate[date].pilots[pilot] = (byPilotDate[date].pilots[pilot] || 0) + effectivePrice(e) - effectiveResPrice(e);
+  });
+
+  // By individual pilot/character
+  const byPilotDetail = {};
+  entries.forEach(e => {
+    const pilot = getPilot(e);
+    if (!byPilotDetail[pilot]) byPilotDetail[pilot] = {
+      pilot,
+      group: getPlayerGroupName(pilot),
+      price:0,
+      resPrice:0,
+      ledgerPrice:0,
+      ledgerResPrice:0,
+      volume:0,
+      amount:0,
+      count:0,
+      dates:new Set()
+    };
+    byPilotDetail[pilot].price += effectivePrice(e);
+    byPilotDetail[pilot].resPrice += effectiveResPrice(e);
+    byPilotDetail[pilot].ledgerPrice += e.price;
+    byPilotDetail[pilot].ledgerResPrice += e.resPrice;
+    byPilotDetail[pilot].volume += e.volume;
+    byPilotDetail[pilot].amount += e.amount;
+    byPilotDetail[pilot].count++;
+    byPilotDetail[pilot].dates.add(e.date);
+  });
+  const pilotDetailStats = Object.values(byPilotDetail).map(p => {
+    const net = p.price - p.resPrice;
+    const ledgerNet = p.ledgerPrice - p.ledgerResPrice;
+    const delta = net - ledgerNet;
+    return {
+      pilot: p.pilot,
+      group: p.group,
+      sessions: p.count,
+      days: p.dates.size,
+      price: p.price,
+      resPrice: p.resPrice,
+      net,
+      avgNet: p.count > 0 ? net / p.count : 0,
+      ledgerNet,
+      delta,
+      deltaPct: ledgerNet !== 0 ? (delta / ledgerNet) * 100 : 0,
+      volume: p.volume,
+      amount: p.amount,
+    };
+  }).sort((a,b)=>b.net-a.net);
+
+  // Fleet payout by date: identical dates with multiple player groups are split evenly.
+  const payoutByGroup = {};
+  const payoutByDate = {};
+  entries.forEach(e => {
+    const date = e.date || 'Unbekannt';
+    const group = getPlayerGroup(e);
+    if (!payoutByDate[date]) payoutByDate[date] = { date, groups:{}, totalNet:0 };
+    const netValue = effectivePrice(e) - effectiveResPrice(e);
+    payoutByDate[date].totalNet += netValue;
+    payoutByDate[date].groups[group] = (payoutByDate[date].groups[group] || 0) + netValue;
+  });
+  Object.values(payoutByDate).forEach(day => {
+    const groups = Object.keys(day.groups);
+    const isFleet = groups.length > 1;
+    const share = isFleet ? day.totalNet / groups.length : 0;
+    groups.forEach(group => {
+      if (!payoutByGroup[group]) payoutByGroup[group] = { payout:0, solo:0, fleet:0, soloDays:0, fleetDays:0 };
+      if (isFleet) {
+        payoutByGroup[group].payout += share;
+        payoutByGroup[group].fleet += share;
+        payoutByGroup[group].fleetDays++;
+      } else {
+        const ownNet = day.groups[group];
+        payoutByGroup[group].payout += ownNet;
+        payoutByGroup[group].solo += ownNet;
+        payoutByGroup[group].soloDays++;
+      }
+    });
+  });
+
+  // By player group
+  const byGroup = {};
+  entries.forEach(e => {
+    const group = getPlayerGroup(e);
+    if (!byGroup[group]) byGroup[group] = {
+      group, pilots:new Set(), price:0, resPrice:0, ledgerPrice:0, ledgerResPrice:0,
+      volume:0, amount:0, count:0, dates:new Set()
+    };
+    byGroup[group].pilots.add(getPilot(e));
+    byGroup[group].price += effectivePrice(e);
+    byGroup[group].resPrice += effectiveResPrice(e);
+    byGroup[group].ledgerPrice += e.price;
+    byGroup[group].ledgerResPrice += e.resPrice;
+    byGroup[group].volume += e.volume;
+    byGroup[group].amount += e.amount;
+    byGroup[group].count++;
+    byGroup[group].dates.add(e.date);
+  });
+  const groupStats = Object.values(byGroup).map(g => {
+    const net = g.price - g.resPrice;
+    const ledgerNet = g.ledgerPrice - g.ledgerResPrice;
+    const delta = net - ledgerNet;
+    const days = g.dates.size;
+    const payout = payoutByGroup[g.group] || { payout:0, solo:0, fleet:0, soloDays:0, fleetDays:0 };
+    return {
+      group: g.group,
+      pilots: [...g.pilots].sort(),
+      sessions: g.count,
+      days,
+      net,
+      ledgerNet,
+      delta,
+      deltaPct: ledgerNet !== 0 ? (delta / ledgerNet) * 100 : 0,
+      payout: payout.payout,
+      soloPayout: payout.solo,
+      fleetPayout: payout.fleet,
+      soloDays: payout.soloDays,
+      fleetDays: payout.fleetDays,
+    };
+  }).sort((a,b)=>b.payout-a.payout);
+
+  const net = totalPrice - totalResPrice;
+  const ledgerNet = ledgerTotalPrice - ledgerTotalResPrice;
+  const marketDelta = net - ledgerNet;
+  const days = Object.keys(byDate).length;
+
+  return {
+    totalPrice, totalResPrice, totalVol, totalResVol,
+    ledgerTotalPrice, ledgerTotalResPrice,
+    totalAmount, totalResAmount,
+    net,
+    ledgerNet,
+    marketDelta,
+    marketDeltaPct: ledgerNet !== 0 ? (marketDelta / ledgerNet) * 100 : 0,
+    marketOverrideCount: entries.filter(hasMarketOverride).length,
+    avgNet: entries.length > 0 ? net / entries.length : 0,
+    payoutTotal: Object.values(payoutByGroup).reduce((s,p)=>s+p.payout,0),
+    fleetDays: Object.values(payoutByDate).filter(d=>Object.keys(d.groups).length > 1).length,
+    soloDays: Object.values(payoutByDate).filter(d=>Object.keys(d.groups).length === 1).length,
+    sessions: entries.length,
+    days,
+    byOre: Object.values(byOre).sort((a,b)=>b.price-a.price),
+    byDate: Object.values(byDate).sort((a,b)=>a.date>b.date?1:-1),
+    byPilotDate: Object.values(byPilotDate).sort((a,b)=>a.date>b.date?1:-1),
+    byPilot: groupStats,
+    byPilotDetail: pilotDetailStats,
+    byPayoutDate: Object.values(payoutByDate).sort((a,b)=>a.date>b.date?1:-1),
+  };
+}
+
+// ─────────────── CHARTS (Chart.js) ───────────────
+let charts = {};
+
+const CHART_DEFAULTS = {
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      backgroundColor: '#0a0f1e',
+      borderColor: 'rgba(0,212,255,0.4)',
+      borderWidth: 1,
+      titleFont: { family: 'Share Tech Mono', size: 11 },
+      bodyFont:  { family: 'Share Tech Mono', size: 11 },
+      titleColor: '#00d4ff',
+      bodyColor: '#c8dce8',
+      padding: 10,
+    }
+  },
+  scales: {
+    x: {
+      ticks: { color: '#4a6070', font: { family: 'Share Tech Mono', size: 9 } },
+      grid: { color: 'rgba(255,255,255,0.04)' },
+    },
+    y: {
+      ticks: { color: '#4a6070', font: { family: 'Share Tech Mono', size: 9 } },
+      grid: { color: 'rgba(255,255,255,0.04)' },
+    }
+  }
+};
+
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+function destroyChartsByPrefix(prefix) {
+  Object.keys(charts).filter(id => id.startsWith(prefix)).forEach(destroyChart);
+}
+
+function chartColor(i, alpha = 0.72) {
+  const palette = [
+    [0,212,255], [0,232,160], [255,204,68], [176,109,255],
+    [255,51,85], [96,165,250], [251,146,60], [34,211,238],
+    [244,114,182], [163,230,53]
+  ];
+  const c = palette[i % palette.length];
+  return `rgba(${c[0]},${c[1]},${c[2]},${alpha})`;
+}
+
+function buildCharts(stats) {
+  // 1. Timeline
+  destroyChart('timeline');
+  const tlCtx = document.getElementById('chartTimeline').getContext('2d');
+  const grad1 = tlCtx.createLinearGradient(0,0,0,200);
+  grad1.addColorStop(0,'rgba(0,212,255,0.25)'); grad1.addColorStop(1,'rgba(0,212,255,0)');
+  const grad2 = tlCtx.createLinearGradient(0,0,0,200);
+  grad2.addColorStop(0,'rgba(255,51,85,0.2)'); grad2.addColorStop(1,'rgba(255,51,85,0)');
+
+  charts.timeline = new Chart(tlCtx, {
+    type: 'line',
+    data: {
+      labels: stats.byDate.map(d=>d.date),
+      datasets: [
+        {
+          label: 'Ertrag ISK',
+          data: stats.byDate.map(d=>d.price),
+          borderColor: '#00d4ff', backgroundColor: grad1,
+          borderWidth: 2, fill: true, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#00d4ff',
+        },
+        {
+          label: 'Rückstandsverlust ISK',
+          data: stats.byDate.map(d=>d.resPrice),
+          borderColor: '#ff3355', backgroundColor: grad2,
+          borderWidth: 2, fill: true, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#ff3355',
+        }
+      ]
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      plugins: {
+        ...CHART_DEFAULTS.plugins,
+        legend: { display: true, labels: { color: '#4a6070', font: {family:'Share Tech Mono',size:10}, boxWidth: 12 } },
+        tooltip: {
+          ...CHART_DEFAULTS.plugins.tooltip,
+          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fISKFull(ctx.raw)}` }
+        }
+      },
+      scales: {
+        x: CHART_DEFAULTS.scales.x,
+        y: { ...CHART_DEFAULTS.scales.y, ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v => fISK(v) } }
+      },
+      responsive: true, maintainAspectRatio: false,
+    }
+  });
+
+  // 2. Pilot share pies for the last 4 days
+  destroyChartsByPrefix('pilotDayPie');
+  const pilotPieWrap = document.getElementById('dailyPilotPies');
+  const latestPilotDays = stats.byPilotDate.slice(-4);
+  const allActivityPilots = [...new Set(stats.byPilotDate.flatMap(d=>Object.keys(d.pilots)))].sort();
+  const pilotColorIndex = Object.fromEntries(allActivityPilots.map((pilot, i) => [pilot, i]));
+  if (pilotPieWrap) {
+    pilotPieWrap.innerHTML = latestPilotDays.length ? latestPilotDays.map((day, i) => {
+      const hasPositiveNet = Object.values(day.pilots).some(v => v > 0);
+      return `<div class="daily-pilot-pie">
+        <div class="daily-pilot-pie-title">${day.date}</div>
+        ${hasPositiveNet ? `
+          <div class="chart-canvas-wrap" style="height:160px">
+            <canvas id="chartPilotDayPie${i}"></canvas>
+          </div>
+          <div class="legend-list" id="pilotDayPieLegend${i}"></div>
+        ` : `<div class="daily-pilot-pie-empty">Kein positiver Netto-Ertrag</div>`}
+      </div>`;
+    }).join('') : `<div class="daily-pilot-pie-empty" style="grid-column:1/-1;">Noch keine Daten geladen</div>`;
+
+    latestPilotDays.forEach((day, i) => {
+      const pilotValues = Object.entries(day.pilots)
+        .filter(([, value]) => value > 0)
+        .sort((a,b)=>b[1]-a[1]);
+      if (!pilotValues.length) return;
+
+      const labels = pilotValues.map(([pilot]) => pilot);
+      const values = pilotValues.map(([, value]) => value);
+      const colors = labels.map(pilot => chartColor(pilotColorIndex[pilot] || 0, 0.82));
+      charts[`pilotDayPie${i}`] = new Chart(document.getElementById(`chartPilotDayPie${i}`).getContext('2d'), {
+        type: 'doughnut',
+        data: {
+          labels,
+          datasets: [{
+            data: values,
+            backgroundColor: colors,
+            borderColor: '#0f1724',
+            borderWidth: 2,
+            hoverOffset: 4,
+          }]
+        },
+        options: {
+          cutout: '52%',
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              ...CHART_DEFAULTS.plugins.tooltip,
+              callbacks: {
+                label: ctx => {
+                  const sum = ctx.dataset.data.reduce((s,v)=>s+v,0);
+                  const pct = sum > 0 ? (ctx.raw / sum * 100).toFixed(1) : '0.0';
+                  return ` ${ctx.label}: ${fISKFull(ctx.raw)} (${pct}%)`;
+                }
+              }
+            }
+          },
+          responsive: true,
+          maintainAspectRatio: false,
+        }
+      });
+
+      const legend = document.getElementById(`pilotDayPieLegend${i}`);
+      if (legend) {
+        legend.innerHTML = pilotValues.map(([pilot, value]) => `
+          <div class="legend-item">
+            <div class="legend-dot" style="background:${chartColor(pilotColorIndex[pilot] || 0, 0.82)}"></div>
+            <span style="color:#8899aa;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${pilot}</span>
+            <span style="color:#c8dce8">${fISK(value)}</span>
+          </div>`).join('');
+      }
+    });
+  }
+
+  // 3. Pilot activity by day
+  destroyChart('pilotActivity');
+  const activityDates = stats.byPilotDate.map(d=>d.date);
+  const activityPilots = allActivityPilots;
+  charts.pilotActivity = new Chart(document.getElementById('chartPilotActivity').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: activityDates,
+      datasets: activityPilots.map((pilot, i) => ({
+        label: pilot,
+        data: stats.byPilotDate.map(d=>d.pilots[pilot] || 0),
+        backgroundColor: chartColor(i, 0.72),
+        borderColor: chartColor(i, 1),
+        borderWidth: 1,
+        borderRadius: 3,
+        stack: 'pilotActivity',
+      }))
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      plugins: {
+        ...CHART_DEFAULTS.plugins,
+        legend: { display: true, labels: { color: '#4a6070', font: {family:'Share Tech Mono',size:10}, boxWidth: 12 } },
+        tooltip: { ...CHART_DEFAULTS.plugins.tooltip, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fISKFull(ctx.raw)}` } }
+      },
+      scales: {
+        x: { ...CHART_DEFAULTS.scales.x, stacked: true },
+        y: { ...CHART_DEFAULTS.scales.y, stacked: true, ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v=>fISK(v) } }
+      },
+      responsive: true, maintainAspectRatio: false,
+    }
+  });
+
+  // 4. Pie
+  destroyChart('pie');
+  const topOres = stats.byOre.slice(0,8);
+  charts.pie = new Chart(document.getElementById('chartPie').getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: topOres.map(o=>o.ore),
+      datasets: [{
+        data: topOres.map(o=>o.price),
+        backgroundColor: topOres.map(o=>getColor(o.ore)),
+        borderWidth: 0,
+        hoverOffset: 4,
+      }]
+    },
+    options: {
+      cutout: '58%',
+      plugins: {
+        legend: { display: false },
+        tooltip: { ...CHART_DEFAULTS.plugins.tooltip, callbacks: { label: ctx => ` ${ctx.label}: ${fISKFull(ctx.raw)}` } }
+      },
+      responsive: true, maintainAspectRatio: false,
+    }
+  });
+
+  // Legend
+  const leg = document.getElementById('pieLegend');
+  leg.innerHTML = topOres.map(o=>`
+    <div class="legend-item">
+      <div class="legend-dot" style="background:${getColor(o.ore)}"></div>
+      <span style="color:#8899aa;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.ore}</span>
+      <span style="color:#c8dce8">${fISK(o.price)}</span>
+    </div>`).join('');
+
+  // 5. Volume
+  destroyChart('volume');
+  const topVol = stats.byOre.slice(0,7);
+  charts.volume = new Chart(document.getElementById('chartVolume').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: topVol.map(o=>o.ore),
+      datasets: [{
+        label: 'Volumen m³',
+        data: topVol.map(o=>o.volume),
+        backgroundColor: topVol.map(o=>getColor(o.ore)+'bb'),
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      plugins: { ...CHART_DEFAULTS.plugins, tooltip: { ...CHART_DEFAULTS.plugins.tooltip, callbacks: { label: ctx => ` ${fVol(ctx.raw)}` } } },
+      scales: {
+        x: { ...CHART_DEFAULTS.scales.x, ticks: { ...CHART_DEFAULTS.scales.x.ticks, maxRotation: 30, font:{family:'Share Tech Mono',size:8} } },
+        y: { ...CHART_DEFAULTS.scales.y, ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v=>fVol(v) } },
+      },
+      responsive: true, maintainAspectRatio: false,
+    }
+  });
+
+}
+
+// ─────────────── RENDER STATS CARDS ───────────────
+function renderStats(stats) {
+  const cards = [
+    { label:'Gesamt-Ertrag', val: fISKFull(stats.totalPrice), color:'var(--green)', icon:'◆', sub: `${stats.sessions} Sessions` },
+    { label:'Rückstandsverlust', val: fISKFull(stats.totalResPrice), color:'var(--red)', icon:'▼', sub: `${fVol(stats.totalResVol)} verloren` },
+    { label:'Netto-ISK', val: fISKFull(stats.net), color: stats.net>=0?'var(--cyan)':'var(--red)', icon:'⊛', sub: '' },
+    { label:'Ø Netto-ISK', val: fISKFull(stats.avgNet), color: stats.avgNet>=0?'var(--cyan)':'var(--red)', icon:'≈', sub: 'pro Session' },
+    { label:'Markt-Abweichung', val: `${stats.marketDelta>=0?'+':''}${fISKFull(stats.marketDelta)}`, color: stats.marketDelta>=0?'var(--green)':'var(--red)', icon:'⇄', sub: `${stats.marketDeltaPct>=0?'+':''}${stats.marketDeltaPct.toFixed(1)}% vs. Importwert` },
+    { label:'Auszahlung gesamt', val: fISKFull(stats.payoutTotal), color:'var(--green)', icon:'◉', sub: 'nach Tages-Split' },
+    { label:'Abbau-Volumen', val: fVol(stats.totalVol), color:'var(--purple)', icon:'⬡', sub: `${fNum(stats.totalAmount)} Einheiten` },
+  ];
+
+  document.getElementById('statsGrid').innerHTML = cards.map(c=>`
+    <div class="card stat-card">
+      <div class="s-icon">${c.icon}</div>
+      <div class="s-label">${c.label}</div>
+      <div class="s-value" style="color:${c.color}">${c.val}</div>
+      <div class="s-sub">${c.sub}</div>
+    </div>`).join('');
+
+  // Header
+  document.getElementById('hdrTotal').textContent = fISKFull(stats.totalPrice);
+  document.getElementById('hdrLoss').textContent  = fISKFull(stats.totalResPrice);
+  document.getElementById('hdrNet').textContent   = fISKFull(stats.net);
+}
+
+function renderPilotOverview(stats) {
+  const body = document.getElementById('pilotOverviewBody');
+  if (!body) return;
+  body.innerHTML = stats.byPilot.map(p => {
+    const deltaTxt = `${p.delta>=0?'+':''}${fISKFull(p.delta)} (${p.deltaPct>=0?'+':''}${p.deltaPct.toFixed(1)}%)`;
+    const pilotList = (p.pilots || []).join(', ');
+    return `<tr>
+      <td style="color:var(--cyan);font-weight:700;">${p.group}<div class="market-source">${pilotList}</div></td>
+      <td>${p.sessions}</td>
+      <td>${p.days}</td>
+      <td style="color:var(--green)">${fISKFull(p.net)}</td>
+      <td>${fISKFull(p.ledgerNet)}</td>
+      <td style="color:${p.delta>=0?'var(--green)':'var(--red)'}">${deltaTxt}</td>
+      <td style="color:var(--cyan)">${fISKFull(p.soloPayout)}<div class="market-source">${p.soloDays} Tage</div></td>
+      <td style="color:var(--gold)">${fISKFull(p.fleetPayout)}<div class="market-source">${p.fleetDays} Tage</div></td>
+      <td style="color:var(--green);font-weight:700;">${fISKFull(p.payout)}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="9" style="color:var(--muted);text-align:center;padding:20px;">Noch keine Daten geladen</td></tr>`;
+}
+
+// ─────────────── PILOT TOTALS TABLE ───────────────
+function renderPilotTotals(stats) {
+  const body = document.getElementById('pilotTotalsBody');
+  if (!body) return;
+  body.innerHTML = (stats.byPilotDetail || []).map(p => {
+    const deltaTxt = `${p.delta>=0?'+':''}${fISKFull(p.delta)} (${p.deltaPct>=0?'+':''}${p.deltaPct.toFixed(1)}%)`;
+    return `<tr>
+      <td style="color:var(--cyan);font-weight:700;">${p.pilot}</td>
+      <td><span class="market-source">${p.group}</span></td>
+      <td>${p.sessions}</td>
+      <td>${p.days}</td>
+      <td style="color:var(--green)">${fISKFull(p.price)}</td>
+      <td style="color:var(--red)">${p.resPrice > 0 ? fISKFull(p.resPrice) : '<span style="color:#334">—</span>'}</td>
+      <td style="color:${p.net>=0?'var(--cyan)':'var(--red)'};font-weight:700;">${fISKFull(p.net)}<div class="market-source">${deltaTxt} vs. Importwert</div></td>
+      <td>${fISKFull(p.avgNet)}</td>
+      <td>${fVol(p.volume)}<div class="market-source">${fNum(p.amount)} Einheiten</div></td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="9" style="color:var(--muted);text-align:center;padding:20px;">Keine Pilotendaten geladen</td></tr>`;
+}
+
+// ─────────────── HISTORY TABLE ───────────────
+function renderHistory() {
+  let filtered = [...entries];
+  const txt = document.getElementById('filterText').value.toLowerCase();
+  const pilot = document.getElementById('filterPilot').value;
+  const ore = document.getElementById('filterOre').value;
+  const sys = document.getElementById('filterSystem').value;
+  const dt  = document.getElementById('filterDate').value;
+
+  if (txt) filtered = filtered.filter(e=>getPilot(e).toLowerCase().includes(txt)||e.ore.toLowerCase().includes(txt)||e.system.toLowerCase().includes(txt));
+  if (pilot) filtered = filtered.filter(e=>getPilot(e)===pilot);
+  if (ore) filtered = filtered.filter(e=>e.ore===ore);
+  if (sys) filtered = filtered.filter(e=>e.system===sys);
+  if (dt)  filtered = filtered.filter(e=>e.date===dt);
+
+  filtered.sort((a,b)=>{
+    let va = a[sortCol], vb = b[sortCol];
+    if (typeof va === 'string') va = va.toLowerCase(), vb = vb.toLowerCase();
+    return va < vb ? sortDir : va > vb ? -sortDir : 0;
+  });
+
+  const total = filtered.length;
+  const pages = Math.ceil(total/PAGE_SIZE);
+  if (histPage >= pages) histPage = Math.max(0, pages-1);
+  const slice = filtered.slice(histPage*PAGE_SIZE, (histPage+1)*PAGE_SIZE);
+
+  document.getElementById('historyBody').innerHTML = slice.map(e => {
+    const eff = e.amount > 0 ? ((e.amount/(e.amount+e.resAmount))*100).toFixed(1)+'%' : '—';
+    const col = getColor(e.ore);
+    const price = effectivePrice(e);
+    const resPrice = effectiveResPrice(e);
+    return `<tr>
+      <td>${e.date}</td>
+      <td style="color:var(--cyan)">${getPilot(e)}</td>
+      <td><span class="ore-badge" style="background:${col}22;color:${col};border:1px solid ${col}44">${e.ore}</span></td>
+      <td>${fNum(e.amount)}</td>
+      <td style="color:var(--red)">${fNum(e.resAmount)}</td>
+      <td>${fVol(e.volume)}</td>
+      <td style="color:#8899aa">${e.system}</td>
+      <td style="color:var(--green)">${fISKFull(price)}</td>
+      <td style="color:var(--red)">${resPrice > 0 ? fISKFull(resPrice) : '<span style="color:#334">—</span>'}</td>
+      <td style="color:var(--gold)">${eff}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteEntry('${e.id}')">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  // Pagination
+  const pg = document.getElementById('historyPagination');
+  if (pages <= 1) { pg.innerHTML = ''; return; }
+  let html = '';
+  for (let i=0;i<pages;i++) {
+    html += `<button class="btn btn-sm" onclick="goPage(${i})"
+      style="padding:4px 10px;background:${i===histPage?'rgba(0,212,255,0.2)':'rgba(255,255,255,0.04)'};color:${i===histPage?'var(--cyan)':'var(--muted)'};border:1px solid ${i===histPage?'rgba(0,212,255,0.4)':'rgba(255,255,255,0.1)'}"
+    >${i+1}</button>`;
+  }
+  pg.innerHTML = html;
+}
+
+function goPage(n) { histPage = n; renderHistory(); }
+function sortHistory(col) {
+  if (sortCol===col) sortDir*=-1; else { sortCol=col; sortDir=-1; }
+  histPage=0; renderHistory();
+}
+function deleteEntry(id) {
+  entries = entries.filter(e=>e.id!==id);
+  saveData(); updateAll();
+}
+
+// ─────────────── FILTERS ───────────────
+function rebuildFilters() {
+  const pilots  = [...new Set(entries.map(getPilot))].sort();
+  const ores    = [...new Set(entries.map(e=>e.ore))].sort();
+  const systems = [...new Set(entries.map(e=>e.system))].sort();
+  const dates   = [...new Set(entries.map(e=>e.date))].sort().reverse();
+
+  const sel = (id, opts) => {
+    const el = document.getElementById(id);
+    const cur = el.value;
+    el.innerHTML = el.options[0].outerHTML + opts.map(o=>`<option value="${o}">${o}</option>`).join('');
+    if (opts.includes(cur)) el.value = cur;
+  };
+  sel('filterPilot', pilots);
+  sel('filterOre', ores);
+  sel('filterSystem', systems);
+  sel('filterDate', dates);
+  document.getElementById('countNum').textContent = entries.length;
+}
+
+// ─────────────── EXPORT ───────────────
+function exportCSV() {
+  const hdr = 'Person\tDatum\tErz\tMenge\tRückstandsmenge\tVolumen\tRückstandsvolumen\tPreis\tRückstandspreis\tSystem';
+  const rows = entries.map(e=>[getPilot(e),e.date,e.ore,e.amount,e.resAmount,e.volume,e.resVol,e.price,e.resPrice,e.system].join('\t'));
+  download('eve-mining-export.tsv', [hdr,...rows].join('\n'));
+}
+function exportJSON() {
+  download('eve-mining-export.json', JSON.stringify(entries, null, 2));
+}
+function download(name, text) {
+  const a = document.createElement('a');
+  a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(text);
+  a.download = name; a.click();
+}
+
+// ─────────────── TAB SWITCH ───────────────
+function showTab(id) {
+  document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el=>el.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(btn=>{
+    if (btn.getAttribute('onclick')?.includes(id)) btn.classList.add('active');
+  });
+}
+
+// ─────────────── UPDATE ALL ───────────────
+function updateAll() {
+  const stats = computeStats();
+  renderStats(stats);
+  renderPilotOverview(stats);
+  renderPilotTotals(stats);
+  buildCharts(stats);
+  rebuildFilters();
+  renderMarketPrices();
+  renderSalesPage();
+  renderHistory();
+}
+
+// ─────────────── SAMPLE DATA (actual user data) ───────────────
+const SAMPLE_RAW = `Zeitstempel\tErzart\tMenge\tRückstandsmenge\tVolumen\tRückstandsvolumen\tPreis ca.\tRückstandspreis ca.\tSonnensystem\tErzart-ID\tSonnensystem-ID
+2026.04.19\t<localized hint="Clear Icicle">Clear Icicle*</localized>\t82\t23\t82000.0\t23000.0\t17514091\t4912489\t<localized hint="Jerma">Jerma*</localized>\t16262\t30002254
+2026.04.19\t<localized hint="Omber II-Grade">Omber II-Grade*</localized>\t119666\t32935\t71799.6\t19761.0\t11894800\t3273739\t<localized hint="Sadye">Sadye*</localized>\t17867\t30002251
+2026.04.19\t<localized hint="Omber">Omber*</localized>\t210660\t62868\t126396.0\t37720.8\t23208412\t6926167\t<localized hint="Sadye">Sadye*</localized>\t1227\t30002251
+2026.04.19\t<localized hint="Pyroxeres II-Grade">Pyroxeres II-Grade*</localized>\t29067\t9110\t8720.1\t2733.0\t765334\t239866\t<localized hint="Bika">Bika*</localized>\t17459\t30002252
+2026.04.19\t<localized hint="Pyroxeres">Pyroxeres*</localized>\t31750\t11568\t9525.0\t3470.4\t802005\t292207\t<localized hint="Bika">Bika*</localized>\t1224\t30002252
+2026.04.19\t<localized hint="Scordite">Scordite*</localized>\t168788\t48764\t25318.2\t7314.6\t2766435\t799241\t<localized hint="Bika">Bika*</localized>\t1228\t30002252
+2026.04.19\t<localized hint="Veldspar II-Grade">Veldspar II-Grade*</localized>\t61290\t17193\t6129.0\t1719.3\t621480\t174337\t<localized hint="Bika">Bika*</localized>\t17470\t30002252
+2026.04.19\t<localized hint="Veldspar III-Grade">Veldspar III-Grade*</localized>\t233362\t75185\t23336.2\t7518.5\t2447967\t788690\t<localized hint="Bika">Bika*</localized>\t17471\t30002252
+2026.04.20\t<localized hint="Pyroxeres II-Grade">Pyroxeres II-Grade*</localized>\t70537\t17208\t21161.1\t5162.4\t1857239\t453086\t<localized hint="Bika">Bika*</localized>\t17459\t30002252
+2026.04.20\t<localized hint="Pyroxeres III-Grade">Pyroxeres III-Grade*</localized>\t12937\t3855\t3881.1\t1156.5\t346064\t103121\t<localized hint="Bika">Bika*</localized>\t17460\t30002252
+2026.04.20\t<localized hint="Pyroxeres">Pyroxeres*</localized>\t209587\t53000\t62876.1\t15900.0\t5294167\t1338780\t<localized hint="Bika">Bika*</localized>\t1224\t30002252
+2026.04.20\t<localized hint="Scordite II-Grade">Scordite II-Grade*</localized>\t317948\t69076\t47692.2\t10361.4\t5246142\t1139754\t<localized hint="Bika">Bika*</localized>\t17463\t30002252
+2026.04.20\t<localized hint="Scordite III-Grade">Scordite III-Grade*</localized>\t200593\t60018\t30088.95\t9002.7\t3456217\t1034110\t<localized hint="Bika">Bika*</localized>\t17464\t30002252
+2026.04.20\t<localized hint="Scordite">Scordite*</localized>\t935674\t295313\t140351.1\t44296.95\t15335696\t4840180\t<localized hint="Bika">Bika*</localized>\t1228\t30002252
+2026.04.20\t<localized hint="Veldspar II-Grade">Veldspar II-Grade*</localized>\t627550\t225875\t62755.0\t22587.5\t6363357\t2290372\t<localized hint="Bika">Bika*</localized>\t17470\t30002252
+2026.04.20\t<localized hint="Veldspar III-Grade">Veldspar III-Grade*</localized>\t94224\t17352\t9422.4\t1735.2\t988409\t182022\t<localized hint="Bika">Bika*</localized>\t17471\t30002252
+2026.04.20\t<localized hint="Veldspar">Veldspar*</localized>\t1090113\t336580\t109011.3\t33658.0\t10519590\t3247997\t<localized hint="Bika">Bika*</localized>\t1230\t30002252
+2026.04.21\t<localized hint="Clear Icicle">Clear Icicle*</localized>\t254\t60\t254000.0\t60000.0\t54250965\t12815188\t<localized hint="Jerma">Jerma*</localized>\t16262\t30002254
+2026.04.21\t<localized hint="Kernite II-Grade">Kernite II-Grade*</localized>\t33090\t7630\t39708.0\t9156.0\t5634565\t1299236\t<localized hint="Nifshed">Nifshed*</localized>\t17452\t30002234
+2026.04.21\t<localized hint="Kernite III-Grade">Kernite III-Grade*</localized>\t15411\t4016\t18493.2\t4819.2\t2906360\t757377\t<localized hint="Nifshed">Nifshed*</localized>\t17453\t30002234
+2026.04.21\t<localized hint="Kernite">Kernite*</localized>\t58484\t12248\t70180.8\t14697.6\t29209833\t6117263\t<localized hint="Nifshed">Nifshed*</localized>\t20\t30002234
+2026.04.21\t<localized hint="Omber II-Grade">Omber II-Grade*</localized>\t7706\t1606\t4623.6\t963.6\t765976\t159636\t<localized hint="Nifshed">Nifshed*</localized>\t17867\t30002234
+2026.04.21\t<localized hint="Omber">Omber*</localized>\t6403\t1607\t3841.8\t964.2\t705418\t177043\t<localized hint="Nifshed">Nifshed*</localized>\t1227\t30002234
+2026.04.21\t<localized hint="Pyroxeres II-Grade">Pyroxeres II-Grade*</localized>\t106751\t31116\t32025.3\t9334.8\t2810753\t819284\t<localized hint="Bika">Bika*</localized>\t17459\t30002252
+2026.04.21\t<localized hint="Pyroxeres III-Grade">Pyroxeres III-Grade*</localized>\t8483\t0\t2544.9\t0.0\t226920\t0\t<localized hint="Bika">Bika*</localized>\t17460\t30002252
+2026.04.21\t<localized hint="Pyroxeres">Pyroxeres*</localized>\t9940\t2286\t2982.0\t685.8\t251084\t57744\t<localized hint="Bika">Bika*</localized>\t1224\t30002252
+2026.04.21\t<localized hint="Scordite">Scordite*</localized>\t27084\t11566\t4062.6\t1734.9\t443906\t189566\t<localized hint="Bika">Bika*</localized>\t1228\t30002252
+2026.04.21\t<localized hint="Veldspar II-Grade">Veldspar II-Grade*</localized>\t69401\t17352\t6940.1\t1735.2\t703726\t175949\t<localized hint="Bika">Bika*</localized>\t17470\t30002252
+2026.04.21\t<localized hint="Veldspar III-Grade">Veldspar III-Grade*</localized>\t270382\t96556\t27038.2\t9655.6\t2836307\t1012872\t<localized hint="Bika">Bika*</localized>\t17471\t30002252
+2026.04.21\t<localized hint="Veldspar">Veldspar*</localized>\t631869\t181240\t63186.9\t18124.0\t6097535\t1748966\t<localized hint="Bika">Bika*</localized>\t1230\t30002252
+2026.04.23\t<localized hint="Pyroxeres II-Grade">Pyroxeres II-Grade*</localized>\t108910\t32773\t32673.0\t9831.9\t2867600\t862913\t<localized hint="Bika">Bika*</localized>\t17459\t30002252
+2026.04.23\t<localized hint="Pyroxeres III-Grade">Pyroxeres III-Grade*</localized>\t10137\t5783\t3041.1\t1734.9\t271164\t154695\t<localized hint="Bika">Bika*</localized>\t17460\t30002252
+2026.04.23\t<localized hint="Pyroxeres">Pyroxeres*</localized>\t277035\t63610\t83110.5\t19083.0\t6997904\t1606788\t<localized hint="Bika">Bika*</localized>\t1224\t30002252
+2026.04.23\t<localized hint="Scordite II-Grade">Scordite II-Grade*</localized>\t373670\t109515\t56050.5\t16427.25\t6165555\t1806997\t<localized hint="Bika">Bika*</localized>\t17463\t30002252
+2026.04.23\t<localized hint="Scordite III-Grade">Scordite III-Grade*</localized>\t119824\t47217\t17973.6\t7082.55\t2064567\t813548\t<localized hint="Bika">Bika*</localized>\t17464\t30002252
+2026.04.23\t<localized hint="Scordite">Scordite*</localized>\t268170\t62117\t40225.5\t9317.55\t4395306\t1018097\t<localized hint="Bika">Bika*</localized>\t1228\t30002252
+2026.04.23\t<localized hint="Veldspar III-Grade">Veldspar III-Grade*</localized>\t76310\t11567\t7631.0\t1156.7\t800491\t121337\t<localized hint="Bika">Bika*</localized>\t17471\t30002252
+2026.04.23\t<localized hint="Veldspar">Veldspar*</localized>\t177138\t59857\t17713.8\t5985.7\t1709381\t577620\t<localized hint="Bika">Bika*</localized>\t1230\t30002252
+2026.04.24\t<localized hint="Pyroxeres II-Grade">Pyroxeres II-Grade*</localized>\t32664\t12124\t9799.2\t3637.2\t860043\t319224\t<localized hint="Bika">Bika*</localized>\t17459\t30002252
+2026.04.24\t<localized hint="Pyroxeres III-Grade">Pyroxeres III-Grade*</localized>\t12936\t3856\t3880.8\t1156.8\t346038\t103148\t<localized hint="Bika">Bika*</localized>\t17460\t30002252
+2026.04.24\t<localized hint="Pyroxeres">Pyroxeres*</localized>\t152131\t49379\t45639.3\t14813.7\t3842829\t1247313\t<localized hint="Bika">Bika*</localized>\t1224\t30002252
+2026.04.24\t<localized hint="Scordite II-Grade">Scordite II-Grade*</localized>\t252710\t61690\t37906.5\t9253.5\t4169715\t1017885\t<localized hint="Bika">Bika*</localized>\t17463\t30002252
+2026.04.24\t<localized hint="Scordite III-Grade">Scordite III-Grade*</localized>\t63373\t22660\t9505.95\t3399.0\t1091916\t390431\t<localized hint="Bika">Bika*</localized>\t17464\t30002252
+2026.04.24\t<localized hint="Scordite">Scordite*</localized>\t942891\t228201\t141433.65\t34230.15\t15453983\t3740214\t<localized hint="Bika">Bika*</localized>\t1228\t30002252
+2026.04.24\t<localized hint="Veldspar II-Grade">Veldspar II-Grade*</localized>\t1220744\t289060\t122074.4\t28906.0\t12378344\t2931068\t<localized hint="Bika">Bika*</localized>\t17470\t30002252
+2026.04.24\t<localized hint="Veldspar III-Grade">Veldspar III-Grade*</localized>\t432274\t144017\t43227.4\t14401.7\t4534554\t1510738\t<localized hint="Bika">Bika*</localized>\t17471\t30002252
+2026.04.24\t<localized hint="Veldspar">Veldspar*</localized>\t2095705\t597136\t209570.5\t59713.6\t20223553\t5762362\t<localized hint="Bika">Bika*</localized>\t1230\t30002252
+2026.04.24\t<localized hint="Zeolites">Zeolites*</localized>\t372\t58\t3720.0\t580.0\t160131\t24966\t<localized hint="Bika">Bika*</localized>\t45490\t30002252
+2026.04.25\t<localized hint="Veldspar II-Grade">Veldspar II-Grade*</localized>\t287730\t58414\t28773.0\t5841.4\t2917582\t592317\t<localized hint="Bika">Bika*</localized>\t17470\t30002252
+2026.04.25\t<localized hint="Veldspar III-Grade">Veldspar III-Grade*</localized>\t98200\t40889\t9820.0\t4088.9\t1030118\t428925\t<localized hint="Bika">Bika*</localized>\t17471\t30002252
+2026.04.25\t<localized hint="Veldspar">Veldspar*</localized>\t120696\t36097\t12069.6\t3609.7\t1164716\t348336\t<localized hint="Bika">Bika*</localized>\t1230\t30002252`;
+
+function loadSampleData() {
+  if (entries.length > 0 && !confirm('Bestehende Daten werden ersetzt. Fortfahren?')) return;
+  entries = parseLedger(SAMPLE_RAW, 'Beispielpilot').filter(e => !isExcludedResourceEntry(e));
+  saveData();
+  updateAll();
+  showMsg('ok', `✓ ${entries.length} Einträge aus deinem Mining Ledger geladen.`);
+}
+
+// ─────────────── INIT ───────────────
+async function initApp() {
+  loadExcludedResources();
+  loadData();
+  loadMarketPriceData();
+  loadSalePlanData();
+  const loadedRemote = await loadRemoteData();
+  if (entries.length === 0 && !loadedRemote) {
+    entries = parseLedger(SAMPLE_RAW, 'Beispielpilot').filter(e => !isExcludedResourceEntry(e));
+    saveData();
+  }
+  updateAll();
+}
+initApp();
+</script>
+
+
+
+
+
+
+
+
+
+
+
+</body></html>
+

@@ -1,0 +1,7 @@
+api/config.php
+api/data/
+*.log
+*.tmp
+*.bak
+Thumbs.db
+desktop.ini
