@@ -741,7 +741,7 @@ textarea#excludedResourcesInput:focus { border-color: var(--cyan); box-shadow: 0
             <th>Tatsächlicher Verkaufspreis</th>
             <th>Solo Alvandeus-Gruppe</th>
             <th>Solo Kastoro-Gruppe</th>
-            <th>Solo Leevi-Gruppe</th>
+            <th>Solo Leevia-Gruppe</th>
             <th>Flotte gesamt</th>
             <th>Flottenanteil</th>
             <th>Notiz</th>
@@ -934,8 +934,12 @@ function fVol(v) {
   if (v >= 1e3) return (v/1e3).toFixed(1)+'K m³';
   return v.toFixed(1)+' m³';
 }
+const PILOT_ALIASES = {
+  Leevi: 'Leevia',
+};
 function getPilot(e) {
-  return (e?.pilot || 'Unbekannt').trim() || 'Unbekannt';
+  const pilot = (e?.pilot || 'Unbekannt').trim() || 'Unbekannt';
+  return PILOT_ALIASES[pilot] || pilot;
 }
 const PLAYER_GROUPS_BY_PILOT = {
   Alvandeus: 'Alvandeus / Alvandea / Alavanda',
@@ -943,8 +947,10 @@ const PLAYER_GROUPS_BY_PILOT = {
   Alavanda: 'Alvandeus / Alvandea / Alavanda',
   Kastoro: 'Kastoro / Enoxs',
   Enoxs: 'Kastoro / Enoxs',
-  Leevi: 'Leevi / Seryna',
-  Seryna: 'Leevi / Seryna',
+  Leevi: 'Leevia / Seryna / Paza',
+  Leevia: 'Leevia / Seryna / Paza',
+  Seryna: 'Leevia / Seryna / Paza',
+  Paza: 'Leevia / Seryna / Paza',
 };
 function getPlayerGroupName(pilot) {
   return PLAYER_GROUPS_BY_PILOT[pilot] || pilot || 'Unbekannt';
@@ -1422,7 +1428,7 @@ function clearMarketPrices() {
 const SALES_GROUPS = [
   { id:'alvandeus', label:'Alvandeus / Alvandea / Alavanda', short:'Alv' },
   { id:'kastoro', label:'Kastoro / Enoxs', short:'Kas' },
-  { id:'leevi', label:'Leevi / Seryna', short:'Lee' },
+  { id:'leevi', label:'Leevia / Seryna / Paza', short:'Lee' },
 ];
 const SALES_MATERIALS = [
   { typeId:34, name:'Tritanium' },
