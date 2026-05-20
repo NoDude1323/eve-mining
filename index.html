@@ -368,7 +368,7 @@ textarea#excludedResourcesInput:focus { border-color: var(--cyan); box-shadow: 0
 #tab-sales .ore-badge { font-size: 12px; padding: 3px 9px; }
 #tab-sales .market-source { font-size: 11px; line-height: 1.25; }
 #tab-sales .price-input { width: 100%; max-width: 96px; box-sizing: border-box; padding: 7px 6px; font-size: 12px; }
-#tab-sales input[data-sale-field="actualPrice"] { max-width: 108px; }
+#tab-sales input[data-sale-field="actualPrice"] { max-width: 128px; }
 #tab-sales input[data-sale-field="note"] { max-width: 94px !important; }
 #tab-sales td:nth-child(3) .market-source,
 #tab-sales td:nth-child(4) .market-source { font-size: 10px; white-space: normal; overflow-wrap: anywhere; }
@@ -889,6 +889,16 @@ function getColor(ore) {
   for (let c of (ore||'')) h = (h*31 + c.charCodeAt(0)) & 0xffff;
   return `hsl(${h%360},65%,60%)`;
 }
+function resourceBadgeStyle(name) {
+  const color = getColor(name);
+  const isHex = /^#[0-9a-f]{6}$/i.test(color);
+  const background = isHex ? `${color}22` : 'rgba(0,212,255,0.10)';
+  const border = isHex ? `${color}44` : 'rgba(0,212,255,0.32)';
+  return `background:${background};color:${color};border:1px solid ${border}`;
+}
+function resourceBadge(name) {
+  return `<span class="ore-badge" style="${resourceBadgeStyle(name)}">${name}</span>`;
+}
 
 // ─────────────── PARSE EVE LOCALIZED ───────────────
 function parseLocalized(str) {
@@ -921,6 +931,10 @@ function fISK(v) {
 }
 function fISKFull(v) {
   return fISK(v) + ' ISK';
+}
+function fISKFullPrecise(v) {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  return Number(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ISK';
 }
 function fNum(v) {
   if (!v && v !== 0) return '—';
@@ -960,11 +974,19 @@ function getPlayerGroup(e) {
 }
 function fUnitISK(v) {
   if (v === null || v === undefined || isNaN(v)) return '—';
-  return Math.round(v).toLocaleString('de-DE') + ' ISK';
+  return Number(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ISK';
 }
 function fUnitISKPrecise(v) {
   if (v === null || v === undefined || isNaN(v)) return '—';
   return Number(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ISK';
+}
+function fISKInput(v) {
+  const n = parseMarketNum(v);
+  return n > 0 ? fUnitISKPrecise(n) : '';
+}
+function formatISKInput(input) {
+  if (!input) return;
+  input.value = fISKInput(input.value);
 }
 function fInputAmount(v) {
   const n = parseMarketNum(v);
@@ -1135,10 +1157,10 @@ function renderMarketPrices() {
     const diffColor = diff === null ? 'var(--muted)' : diff >= 0 ? 'var(--green)' : 'var(--red)';
     const sourceTxt = netUnit ? (activeMarketMode() === 'seller' ? 'Eigene Sell-Order' : 'Sofortverkauf') : 'Ledger';
     return `<tr>
-      <td><span class="ore-badge" style="background:${getColor(r.ore)}22;color:${getColor(r.ore)};border:1px solid ${getColor(r.ore)}44">${r.ore}</span></td>
+      <td>${resourceBadge(r.ore)}</td>
       <td>${fUnitISK(ledgerUnit)}</td>
-      <td><input class="price-input" data-price-kind="instant" data-ore="${escAttr(r.ore)}" value="${instantUnit ?? ''}" placeholder="Buy Ø ISK/Stück">${instantNetUnit ? `<div class="market-source">Netto nur Steuer: ${fUnitISK(instantNetUnit)}</div>` : ''}</td>
-      <td><input class="price-input" data-price-kind="seller" data-ore="${escAttr(r.ore)}" value="${sellerUnit ?? ''}" placeholder="${r.oreId && DEFAULT_MARKET_PRICES_BY_TYPE_ID[r.oreId] ? fUnitISK(DEFAULT_MARKET_PRICES_BY_TYPE_ID[r.oreId]) : 'Sell Ø ISK/Stück'}">${sellerNetUnit ? `<div class="market-source">Netto Steuer + Broker: ${fUnitISK(sellerNetUnit)}</div>` : ''}</td>
+      <td><input class="price-input" data-price-kind="instant" data-ore="${escAttr(r.ore)}" value="${fISKInput(instantUnit)}" placeholder="Buy Ø ISK/Stück" onblur="formatISKInput(this)">${instantNetUnit ? `<div class="market-source">Netto nur Steuer: ${fUnitISK(instantNetUnit)}</div>` : ''}</td>
+      <td><input class="price-input" data-price-kind="seller" data-ore="${escAttr(r.ore)}" value="${fISKInput(sellerUnit)}" placeholder="${r.oreId && DEFAULT_MARKET_PRICES_BY_TYPE_ID[r.oreId] ? fUnitISK(DEFAULT_MARKET_PRICES_BY_TYPE_ID[r.oreId]) : 'Sell Ø ISK/Stück'}" onblur="formatISKInput(this)">${sellerNetUnit ? `<div class="market-source">Netto Steuer + Broker: ${fUnitISK(sellerNetUnit)}</div>` : ''}</td>
       <td style="color:${diffColor}">${diffTxt}</td>
       <td><span class="market-source">${sourceTxt}</span></td>
     </tr>`;
@@ -1526,13 +1548,12 @@ function renderSalesMaterialsTable() {
     }).join('');
     const fleetGroups = Array.isArray(plan.fleetGroups) ? plan.fleetGroups : SALES_GROUPS.map(group => group.id);
     const fleetChecks = SALES_GROUPS.map(group => `<label class="market-source" style="display:inline-flex;align-items:center;gap:4px;margin-right:8px;white-space:nowrap;"><input type="checkbox" data-sale-material="${key}" data-sale-fleet-group="${group.id}" ${fleetGroups.includes(group.id) ? 'checked' : ''} onchange="renderSalesPayoutCards()">${group.short}</label>`).join('');
-    const col = getColor(material.name);
     return `<tr>
-      <td><span class="ore-badge" style="background:${col}22;color:${col};border:1px solid ${col}44">${material.name}</span></td>
+      <td>${resourceBadge(material.name)}</td>
       <td>${material.typeId}</td>
       <td><span style="color:var(--gold)">${avg5}</span><div class="market-source">${meta5}</div></td>
       <td><span style="color:var(--cyan)">${avg20}</span><div class="market-source">${meta20}</div></td>
-      <td><input class="price-input" data-sale-material="${key}" data-sale-field="actualPrice" value="${plan.actualPrice || ''}" placeholder="ISK/Stück, z.B. 3,66" oninput="renderSalesPayoutCards()"></td>
+      <td><input class="price-input" data-sale-material="${key}" data-sale-field="actualPrice" value="${fISKInput(plan.actualPrice)}" placeholder="ISK/Stück, z.B. 3,66" oninput="renderSalesPayoutCards()" onblur="formatISKInput(this);renderSalesPayoutCards()"></td>
       ${soloInputs}
       <td><input class="price-input" data-sale-material="${key}" data-sale-field="fleetAmount" value="${fInputAmount(plan.fleetAmount)}" placeholder="Flotte" oninput="renderSalesPayoutCards()" onblur="formatAmountInput(this);renderSalesPayoutCards()"></td>
       <td>${fleetChecks}</td>
@@ -1565,8 +1586,8 @@ function renderSalesPayoutCards() {
     return `<div class="card stat-card">
       <div class="s-icon">◉</div>
       <div class="s-label">${group.label}</div>
-      <div class="s-value" style="color:${payout > 0 ? 'var(--green)' : 'var(--muted)'}">${fISKFull(payout)}</div>
-      <div class="s-sub">${materialCount} Materialien · Gebühren ${fISKFull(fee)}</div>
+      <div class="s-value" style="color:${payout > 0 ? 'var(--green)' : 'var(--muted)'}">${fISKFullPrecise(payout)}</div>
+      <div class="s-sub">${materialCount} Materialien · Gebühren ${fISKFullPrecise(fee)}</div>
     </div>`;
   }).join('');
 }
@@ -2361,13 +2382,12 @@ function renderHistory() {
 
   document.getElementById('historyBody').innerHTML = slice.map(e => {
     const eff = e.amount > 0 ? ((e.amount/(e.amount+e.resAmount))*100).toFixed(1)+'%' : '—';
-    const col = getColor(e.ore);
     const price = effectivePrice(e);
     const resPrice = effectiveResPrice(e);
     return `<tr>
       <td>${e.date}</td>
       <td style="color:var(--cyan)">${getPilot(e)}</td>
-      <td><span class="ore-badge" style="background:${col}22;color:${col};border:1px solid ${col}44">${e.ore}</span></td>
+      <td>${resourceBadge(e.ore)}</td>
       <td>${fNum(e.amount)}</td>
       <td style="color:var(--red)">${fNum(e.resAmount)}</td>
       <td>${fVol(e.volume)}</td>
