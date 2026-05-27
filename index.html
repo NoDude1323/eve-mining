@@ -369,24 +369,19 @@ textarea#excludedResourcesInput:focus { border-color: var(--cyan); box-shadow: 0
 #tab-sales .market-source { font-size: 11px; line-height: 1.25; }
 #tab-sales .price-input { width: 100%; max-width: 96px; box-sizing: border-box; padding: 7px 6px; font-size: 12px; }
 #tab-sales input[data-sale-field="actualPrice"] { max-width: 118px; }
-#tab-sales input[data-sale-field="note"] { max-width: 94px !important; }
 #tab-sales td:nth-child(3) .market-source,
 #tab-sales td:nth-child(4) .market-source,
 #tab-sales td:nth-child(5) .market-source { font-size: 10px; white-space: normal; overflow-wrap: anywhere; }
 #tab-sales td:nth-child(1), #tab-sales th:nth-child(1) { width: 8%; }
-#tab-sales td:nth-child(2), #tab-sales th:nth-child(2) { width: 4%; }
+#tab-sales td:nth-child(2), #tab-sales th:nth-child(2) { width: 14%; }
 #tab-sales td:nth-child(3), #tab-sales th:nth-child(3),
 #tab-sales td:nth-child(4), #tab-sales th:nth-child(4),
 #tab-sales td:nth-child(5), #tab-sales th:nth-child(5) { width: 8%; }
 #tab-sales td:nth-child(6), #tab-sales th:nth-child(6) { width: 9%; }
 #tab-sales td:nth-child(7), #tab-sales th:nth-child(7) { width: 9%; }
 #tab-sales td:nth-child(8), #tab-sales th:nth-child(8),
-#tab-sales td:nth-child(9), #tab-sales th:nth-child(9),
-#tab-sales td:nth-child(10), #tab-sales th:nth-child(10) { width: 8%; }
-#tab-sales td:nth-child(11), #tab-sales th:nth-child(11) { width: 9%; }
-#tab-sales td:nth-child(12), #tab-sales th:nth-child(12) { width: 6%; }
-#tab-sales td:nth-child(11) label.market-source { gap: 2px !important; margin-right: 3px !important; font-size: 11px; }
-#tab-sales td:nth-child(11) input[type="checkbox"] { width: 13px; height: 13px; }
+#tab-sales td:nth-child(9), #tab-sales th:nth-child(9) { width: 8%; }
+#tab-sales td:nth-child(10), #tab-sales th:nth-child(10) { width: 10%; }
 
 .btn {
   border: none;
@@ -746,8 +741,6 @@ textarea#excludedResourcesInput:focus { border-color: var(--cyan); box-shadow: 0
             <th>Solo Kastoro-Gruppe</th>
             <th>Solo Leevia-Gruppe</th>
             <th>Flotte gesamt</th>
-            <th>Flottenanteil</th>
-            <th>Notiz</th>
           </tr>
         </thead>
         <tbody id="salesMaterialsBody"></tbody>
@@ -1524,16 +1517,18 @@ function currentSalesPlansFromUI() {
     SALES_GROUPS.forEach(group => {
       soloAmounts[group.id] = parseMarketNum(document.querySelector(`[data-sale-material="${key}"][data-sale-solo-group="${group.id}"]`)?.value || 0);
     });
-    const fleetGroups = SALES_GROUPS
+    const fleetGroupInputs = SALES_GROUPS
+      .map(group => document.querySelector(`[data-sale-material="${key}"][data-sale-fleet-group="${group.id}"]`))
+      .filter(Boolean);
+    const fleetGroups = fleetGroupInputs.length ? SALES_GROUPS
       .filter(group => document.querySelector(`[data-sale-material="${key}"][data-sale-fleet-group="${group.id}"]`)?.checked)
-      .map(group => group.id);
+      .map(group => group.id) : (Array.isArray(previous.fleetGroups) && previous.fleetGroups.length ? previous.fleetGroups : SALES_GROUPS.map(group => group.id));
     materials[key] = {
       ...previous,
       actualPrice: parseMarketNum(document.querySelector(`[data-sale-material="${key}"][data-sale-field="actualPrice"]`)?.value || 0),
       soloAmounts,
       fleetAmount: parseMarketNum(document.querySelector(`[data-sale-material="${key}"][data-sale-field="fleetAmount"]`)?.value || 0),
       fleetGroups,
-      note: document.querySelector(`[data-sale-material="${key}"][data-sale-field="note"]`)?.value?.trim() || '',
     };
   });
   return { ...(salePlans || {}), materials };
@@ -1592,8 +1587,6 @@ function renderSalesMaterialsTable() {
       const soloValue = plan.soloAmounts?.[group.id] ?? plan.amounts?.[group.id] ?? '';
       return `<td><input class="price-input" data-sale-material="${key}" data-sale-solo-group="${group.id}" value="${fInputAmount(soloValue)}" placeholder="Solo" oninput="renderSalesPayoutCards()" onblur="formatAmountInput(this);renderSalesPayoutCards()"></td>`;
     }).join('');
-    const fleetGroups = Array.isArray(plan.fleetGroups) ? plan.fleetGroups : SALES_GROUPS.map(group => group.id);
-    const fleetChecks = SALES_GROUPS.map(group => `<label class="market-source" style="display:inline-flex;align-items:center;gap:4px;margin-right:8px;white-space:nowrap;"><input type="checkbox" data-sale-material="${key}" data-sale-fleet-group="${group.id}" ${fleetGroups.includes(group.id) ? 'checked' : ''} onchange="renderSalesPayoutCards()">${group.short}</label>`).join('');
     return `<tr>
       <td>${resourceBadge(material.name)}</td>
       <td>${trendMeta}</td>
@@ -1603,8 +1596,6 @@ function renderSalesMaterialsTable() {
       <td><input class="price-input" data-sale-material="${key}" data-sale-field="actualPrice" value="${fISKInput(plan.actualPrice)}" placeholder="ISK/Stück, z.B. 3,66" oninput="renderSalesPayoutCards()" onblur="formatISKInput(this);renderSalesPayoutCards()"></td>
       ${soloInputs}
       <td><input class="price-input" data-sale-material="${key}" data-sale-field="fleetAmount" value="${fInputAmount(plan.fleetAmount)}" placeholder="Flotte" oninput="renderSalesPayoutCards()" onblur="formatAmountInput(this);renderSalesPayoutCards()"></td>
-      <td>${fleetChecks}</td>
-      <td><input class="price-input" data-sale-material="${key}" data-sale-field="note" value="${escAttr(plan.note || '')}" placeholder="z.B. 7 Tage" style="width:180px;"></td>
     </tr>`;
   }).join('');
 }
