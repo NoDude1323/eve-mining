@@ -983,6 +983,11 @@ function fUnitISKPrecise(v) {
   if (v === null || v === undefined || isNaN(v)) return '—';
   return Number(v).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ISK';
 }
+function fPercent(v) {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  const sign = Number(v) > 0 ? '+' : '';
+  return sign + Number(v).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+}
 function fISKInput(v) {
   const n = parseMarketNum(v);
   return n > 0 ? fUnitISKPrecise(n) : '';
@@ -1553,6 +1558,17 @@ function salesPriceRecommendation(plan) {
   else if (price > 0) quality = 'dünn';
   return { price, basis, quality };
 }
+function salesTrendMeta(plan) {
+  const trend = plan.stationTrend120d || {};
+  const pct = Number(trend.percent);
+  if (!trend.direction || trend.direction === 'unknown' || isNaN(pct)) {
+    return '';
+  }
+  const color = trend.direction === 'up' ? 'var(--green)' : trend.direction === 'down' ? 'var(--red)' : 'var(--muted)';
+  const title = `${trend.days || 120}T Trend: ${trend.label || 'seitwärts'} ${fPercent(pct)}`;
+  const range = trend.fromDate && trend.toDate ? ` (${trend.fromDate} bis ${trend.toDate})` : '';
+  return `<div class="market-source" style="color:${color};">${title}${range}</div>`;
+}
 function renderSalesMaterialsTable() {
   const body = document.getElementById('salesMaterialsBody');
   if (!body) return;
@@ -1564,6 +1580,7 @@ function renderSalesMaterialsTable() {
     const recommendation = salesPriceRecommendation(plan);
     const recommendationText = recommendation.price ? fUnitISKPrecise(recommendation.price) : '—';
     const recommendationMeta = recommendation.basis ? `${recommendation.basis} · ${recommendation.quality}` : '';
+    const trendMeta = salesTrendMeta(plan);
     const rangeLabel = (dates, fallback) => {
       if (Array.isArray(dates) && dates.length) return dates.length > 1 ? `${dates[0]} bis ${dates[dates.length - 1]}` : dates[0];
       return fallback ? `Stand: ${fallback}` : '';
@@ -1581,7 +1598,7 @@ function renderSalesMaterialsTable() {
       <td>${material.typeId}</td>
       <td><span style="color:var(--gold)">${station5}</span><div class="market-source">${meta5}</div></td>
       <td><span style="color:var(--cyan)">${station20}</span><div class="market-source">${meta20}</div></td>
-      <td><span style="color:var(--green)">${recommendationText}</span><div class="market-source">${recommendationMeta}</div></td>
+      <td><span style="color:var(--green)">${recommendationText}</span><div class="market-source">${recommendationMeta}</div>${trendMeta}</td>
       <td><input class="price-input" data-sale-material="${key}" data-sale-field="actualPrice" value="${fISKInput(plan.actualPrice)}" placeholder="ISK/Stück, z.B. 3,66" oninput="renderSalesPayoutCards()" onblur="formatISKInput(this);renderSalesPayoutCards()"></td>
       ${soloInputs}
       <td><input class="price-input" data-sale-material="${key}" data-sale-field="fleetAmount" value="${fInputAmount(plan.fleetAmount)}" placeholder="Flotte" oninput="renderSalesPayoutCards()" onblur="formatAmountInput(this);renderSalesPayoutCards()"></td>
@@ -1655,7 +1672,7 @@ async function refreshSalesMaterialAverages() {
         const res = await fetch(apiUrl('sales-station-history'), {
           method: 'POST',
           headers: apiHeaders(),
-          body: JSON.stringify({ stationId: SALES_STATION_ID, typeId: material.typeId, days: 20 }),
+          body: JSON.stringify({ stationId: SALES_STATION_ID, typeId: material.typeId, days: 120 }),
         });
         let payload = null;
         try { payload = await res.json(); } catch(e) {}
@@ -1686,6 +1703,7 @@ async function refreshSalesMaterialAverages() {
           stationVolume5d: station.stationVolume5d,
           stationVolume20d: station.stationVolume20d,
           stationTrades20d: station.stationTrades20d,
+          stationTrend120d: station.stationTrend120d,
           stationLastDate: station.lastDate,
           stationDates: station.dates || [],
           stationBasis: station.basis,
@@ -1719,7 +1737,7 @@ async function refreshSalesMaterialAverages() {
     saveSalePlanData();
     renderSalesPage();
     const errorText = errors.length ? ` ${errors.length} Materialien ohne Stationdaten. Erstes Problem: ${errors[0]}` : '';
-    showSalesMsg('ok', `✓ ${updated} Materialien mit station-genauem 5T/20T VWAP aktualisiert.${errorText}`);
+    showSalesMsg('ok', `✓ ${updated} Materialien mit station-genauem 5T/20T VWAP und 120T-Trend aktualisiert.${errorText}`);
   } catch (err) {
     showSalesMsg('err', `Stationpreise konnten nicht geladen werden: ${err.message}`);
   }

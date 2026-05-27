@@ -273,8 +273,7 @@ function parse_adam_station_history(string $html): array {
     return $rows;
 }
 
-function adam_station_summary(array $rows, int $days): array {
-    $recent = array_slice($rows, 0, $days);
+function adam_station_summary_from_rows(array $recent, int $requestedDays): array {
     $prices = array_map(static fn($row) => (float)$row['unit'], $recent);
     $median = median($prices);
     $filtered = $recent;
@@ -302,7 +301,7 @@ function adam_station_summary(array $rows, int $days): array {
     }
     return [
         'days' => count($filtered),
-        'requestedDays' => $days,
+        'requestedDays' => $requestedDays,
         'price' => $quantity > 0 ? $value / $quantity : null,
         'quantity' => $quantity,
         'value' => $value,
@@ -310,6 +309,64 @@ function adam_station_summary(array $rows, int $days): array {
         'median' => $median,
         'dates' => $dates,
         'lastDate' => $dates[0] ?? null,
+    ];
+}
+
+function adam_station_summary(array $rows, int $days): array {
+    return adam_station_summary_from_rows(array_slice($rows, 0, $days), $days);
+}
+
+function adam_station_trend(array $rows, int $days = 120): array {
+    $window = array_slice($rows, 0, $days);
+    $count = count($window);
+    if ($count < 10) {
+        return [
+            'direction' => 'unknown',
+            'label' => 'zu wenig Daten',
+            'percent' => null,
+            'days' => $count,
+            'compareDays' => 0,
+        ];
+    }
+
+    $compareDays = min(20, max(5, (int)floor($count / 4)));
+    $recent = adam_station_summary_from_rows(array_slice($window, 0, $compareDays), $compareDays);
+    $older = adam_station_summary_from_rows(array_slice($window, -$compareDays), $compareDays);
+    $recentPrice = (float)($recent['price'] ?? 0);
+    $olderPrice = (float)($older['price'] ?? 0);
+    if ($recentPrice <= 0 || $olderPrice <= 0) {
+        return [
+            'direction' => 'unknown',
+            'label' => 'zu wenig Daten',
+            'percent' => null,
+            'days' => $count,
+            'compareDays' => $compareDays,
+        ];
+    }
+
+    $percent = (($recentPrice - $olderPrice) / $olderPrice) * 100;
+    $abs = abs($percent);
+    if ($abs < 1.5) {
+        $direction = 'flat';
+        $label = 'seitwärts';
+    } elseif ($percent > 0) {
+        $direction = 'up';
+        $label = $abs >= 8 ? 'stark steigend' : 'steigend';
+    } else {
+        $direction = 'down';
+        $label = $abs >= 8 ? 'stark fallend' : 'fallend';
+    }
+
+    return [
+        'direction' => $direction,
+        'label' => $label,
+        'percent' => $percent,
+        'days' => $count,
+        'compareDays' => $compareDays,
+        'recentPrice' => $recentPrice,
+        'olderPrice' => $olderPrice,
+        'fromDate' => $window[$count - 1]['date'] ?? null,
+        'toDate' => $window[0]['date'] ?? null,
     ];
 }
 
@@ -480,7 +537,7 @@ if ($action === 'sales-station-history') {
     }
     $typeId = (int)($body['typeId'] ?? 34);
     $stationId = (int)($body['stationId'] ?? 60008494);
-    $days = max(1, min(30, (int)($body['days'] ?? 20)));
+    $days = max(1, min(120, (int)($body['days'] ?? 20)));
     if ($typeId <= 0 || $stationId <= 0) {
         respond(400, ['ok' => false, 'error' => 'Invalid stationId or typeId']);
     }
@@ -496,7 +553,8 @@ if ($action === 'sales-station-history') {
             respond(404, ['ok' => false, 'error' => 'No station history data found']);
         }
         $summary5 = adam_station_summary($rows, min(5, $days));
-        $summary20 = adam_station_summary($rows, $days);
+        $summary20 = adam_station_summary($rows, min(20, $days));
+        $trend120 = adam_station_trend($rows, min(120, $days));
         respond(200, [
             'ok' => true,
             'data' => [
@@ -508,6 +566,7 @@ if ($action === 'sales-station-history') {
                 'stationVolume5d' => $summary5['quantity'],
                 'stationVolume20d' => $summary20['quantity'],
                 'stationTrades20d' => $summary20['trades'],
+                'stationTrend120d' => $trend120,
                 'lastDate' => $summary20['lastDate'],
                 'dates' => $summary20['dates'],
                 'basis' => 'Adam4EVE station Bought from sell order VWAP, outlier-trimmed around median',
