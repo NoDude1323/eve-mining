@@ -189,8 +189,14 @@ function fetch_text(string $url): string {
         CURLOPT_FOLLOWLOCATION => true,
         CURLOPT_CONNECTTIMEOUT => 8,
         CURLOPT_TIMEOUT => 20,
-        CURLOPT_USERAGENT => 'EVE Mining Journal/1.0',
-        CURLOPT_HTTPHEADER => ['Accept: text/html,application/xhtml+xml'],
+        CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
+        CURLOPT_HTTPHEADER => [
+            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language: de-DE,de;q=0.9,en;q=0.8',
+            'Cache-Control: no-cache',
+            'Pragma: no-cache',
+            'Referer: https://www.adam4eve.eu/',
+        ],
         CURLOPT_ENCODING => '',
     ]);
     $raw = curl_exec($ch);

@@ -737,7 +737,7 @@ textarea#excludedResourcesInput:focus { border-color: var(--cyan); box-shadow: 0
         <thead>
           <tr>
             <th>Material</th>
-            <th>TypeID</th>
+            <th>120T Trend</th>
             <th>Station 5T VWAP</th>
             <th>Station 20T VWAP</th>
             <th>Empfehlung</th>
@@ -1562,12 +1562,12 @@ function salesTrendMeta(plan) {
   const trend = plan.stationTrend120d || {};
   const pct = Number(trend.percent);
   if (!trend.direction || trend.direction === 'unknown' || isNaN(pct)) {
-    return '';
+    return '<span class="market-source">—</span>';
   }
   const color = trend.direction === 'up' ? 'var(--green)' : trend.direction === 'down' ? 'var(--red)' : 'var(--muted)';
-  const title = `${trend.days || 120}T Trend: ${trend.label || 'seitwärts'} ${fPercent(pct)}`;
-  const range = trend.fromDate && trend.toDate ? ` (${trend.fromDate} bis ${trend.toDate})` : '';
-  return `<div class="market-source" style="color:${color};">${title}${range}</div>`;
+  const title = `${trend.label || 'seitwärts'} ${fPercent(pct)}`;
+  const range = trend.fromDate && trend.toDate ? `${trend.fromDate} bis ${trend.toDate}` : `${trend.days || 120} Tage`;
+  return `<span style="color:${color};font-weight:700;">${title}</span><div class="market-source">${range}</div>`;
 }
 function renderSalesMaterialsTable() {
   const body = document.getElementById('salesMaterialsBody');
@@ -1595,10 +1595,10 @@ function renderSalesMaterialsTable() {
     const fleetChecks = SALES_GROUPS.map(group => `<label class="market-source" style="display:inline-flex;align-items:center;gap:4px;margin-right:8px;white-space:nowrap;"><input type="checkbox" data-sale-material="${key}" data-sale-fleet-group="${group.id}" ${fleetGroups.includes(group.id) ? 'checked' : ''} onchange="renderSalesPayoutCards()">${group.short}</label>`).join('');
     return `<tr>
       <td>${resourceBadge(material.name)}</td>
-      <td>${material.typeId}</td>
+      <td>${trendMeta}</td>
       <td><span style="color:var(--gold)">${station5}</span><div class="market-source">${meta5}</div></td>
       <td><span style="color:var(--cyan)">${station20}</span><div class="market-source">${meta20}</div></td>
-      <td><span style="color:var(--green)">${recommendationText}</span><div class="market-source">${recommendationMeta}</div>${trendMeta}</td>
+      <td><span style="color:var(--green)">${recommendationText}</span><div class="market-source">${recommendationMeta}</div></td>
       <td><input class="price-input" data-sale-material="${key}" data-sale-field="actualPrice" value="${fISKInput(plan.actualPrice)}" placeholder="ISK/Stück, z.B. 3,66" oninput="renderSalesPayoutCards()" onblur="formatISKInput(this);renderSalesPayoutCards()"></td>
       ${soloInputs}
       <td><input class="price-input" data-sale-material="${key}" data-sale-field="fleetAmount" value="${fInputAmount(plan.fleetAmount)}" placeholder="Flotte" oninput="renderSalesPayoutCards()" onblur="formatAmountInput(this);renderSalesPayoutCards()"></td>
