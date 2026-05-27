@@ -332,6 +332,7 @@ function adam_station_trend(array $rows, int $days = 120): array {
             'percent' => null,
             'days' => $count,
             'compareDays' => 0,
+            'source' => 'Station',
         ];
     }
 
@@ -347,6 +348,86 @@ function adam_station_trend(array $rows, int $days = 120): array {
             'percent' => null,
             'days' => $count,
             'compareDays' => $compareDays,
+            'source' => 'Station',
+        ];
+    }
+
+    $percent = (($recentPrice - $olderPrice) / $olderPrice) * 100;
+    $abs = abs($percent);
+    if ($abs < 1.5) {
+        $direction = 'flat';
+        $label = 'seitwärts';
+    } elseif ($percent > 0) {
+        $direction = 'up';
+        $label = $abs >= 8 ? 'stark steigend' : 'steigend';
+    } else {
+        $direction = 'down';
+        $label = $abs >= 8 ? 'stark fallend' : 'fallend';
+    }
+
+    $oldest = market_history_average([$window[$count - 1]]);
+    $newest = market_history_average([$window[0]]);
+
+    return [
+        'direction' => $direction,
+        'label' => $label,
+        'percent' => $percent,
+        'days' => $count,
+        'compareDays' => $compareDays,
+        'recentPrice' => $recentPrice,
+        'olderPrice' => $olderPrice,
+        'fromDate' => $window[$count - 1]['date'] ?? null,
+        'toDate' => $window[0]['date'] ?? null,
+        'source' => 'Station',
+    ];
+}
+
+function market_history_average(array $rows): array {
+    $sum = 0.0;
+    $volume = 0;
+    $dates = [];
+    foreach ($rows as $row) {
+        $sum += (float)$row['average'];
+        $volume += (int)($row['volume'] ?? 0);
+        $timestamp = ((float)($row['date'] ?? 0)) / 1000;
+        if ($timestamp > 0) {
+            $dates[] = gmdate('Y-m-d', (int)$timestamp);
+        }
+    }
+    return [
+        'price' => count($rows) > 0 ? $sum / count($rows) : null,
+        'volume' => $volume,
+        'dates' => $dates,
+    ];
+}
+
+function market_history_trend(array $rows, int $days = 120): array {
+    $window = array_slice($rows, 0, $days);
+    $count = count($window);
+    if ($count < 10) {
+        return [
+            'direction' => 'unknown',
+            'label' => 'zu wenig Daten',
+            'percent' => null,
+            'days' => $count,
+            'compareDays' => 0,
+            'source' => 'Region',
+        ];
+    }
+
+    $compareDays = min(20, max(5, (int)floor($count / 4)));
+    $recent = market_history_average(array_slice($window, 0, $compareDays));
+    $older = market_history_average(array_slice($window, -$compareDays));
+    $recentPrice = (float)($recent['price'] ?? 0);
+    $olderPrice = (float)($older['price'] ?? 0);
+    if ($recentPrice <= 0 || $olderPrice <= 0) {
+        return [
+            'direction' => 'unknown',
+            'label' => 'zu wenig Daten',
+            'percent' => null,
+            'days' => $count,
+            'compareDays' => $compareDays,
+            'source' => 'Region',
         ];
     }
 
@@ -371,8 +452,9 @@ function adam_station_trend(array $rows, int $days = 120): array {
         'compareDays' => $compareDays,
         'recentPrice' => $recentPrice,
         'olderPrice' => $olderPrice,
-        'fromDate' => $window[$count - 1]['date'] ?? null,
-        'toDate' => $window[0]['date'] ?? null,
+        'fromDate' => $oldest['dates'][0] ?? null,
+        'toDate' => $newest['dates'][0] ?? null,
+        'source' => 'Region',
     ];
 }
 
@@ -487,7 +569,7 @@ if ($action === 'sales-material-history') {
     }
     $regionId = (int)($body['regionId'] ?? 10000043);
     $typeId = (int)($body['typeId'] ?? 37);
-    $days = max(1, min(30, (int)($body['days'] ?? 10)));
+    $days = max(1, min(120, (int)($body['days'] ?? 10)));
     if ($regionId <= 0 || $typeId <= 0) {
         respond(400, ['ok' => false, 'error' => 'Invalid region or typeId']);
     }
@@ -504,26 +586,20 @@ if ($action === 'sales-material-history') {
         if (!$recent) {
             respond(404, ['ok' => false, 'error' => 'No history data found']);
         }
-        $sum = 0.0;
-        $volume = 0;
-        $dates = [];
-        foreach ($recent as $row) {
-            $sum += (float)$row['average'];
-            $volume += (int)($row['volume'] ?? 0);
-            $timestamp = ((float)($row['date'] ?? 0)) / 1000;
-            if ($timestamp > 0) {
-                $dates[] = gmdate('Y-m-d', (int)$timestamp);
-            }
-        }
+        $summary = market_history_average($recent);
+        $trend120 = market_history_trend(array_values(array_filter($history, static function ($row) {
+            return isset($row['average']) && is_numeric($row['average']) && (float)$row['average'] > 0;
+        })), min(120, $days));
         respond(200, [
             'ok' => true,
             'data' => [
                 'regionId' => $regionId,
                 'typeId' => $typeId,
                 'days' => count($recent),
-                'avgSell' => $sum / count($recent),
-                'volume' => $volume,
-                'dates' => $dates,
+                'avgSell' => $summary['price'],
+                'volume' => $summary['volume'],
+                'dates' => $summary['dates'],
+                'trend120d' => $trend120,
                 'basis' => 'EVE Tycoon market history average over newest days',
                 'fetchedAt' => gmdate('Y-m-d H:i'),
             ],

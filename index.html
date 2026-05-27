@@ -1565,7 +1565,8 @@ function salesTrendMeta(plan) {
     return '<span class="market-source">—</span>';
   }
   const color = trend.direction === 'up' ? 'var(--green)' : trend.direction === 'down' ? 'var(--red)' : 'var(--muted)';
-  const title = `${trend.label || 'seitwärts'} ${fPercent(pct)}`;
+  const source = trend.source ? `${trend.source} ` : '';
+  const title = `${source}${trend.label || 'seitwärts'} ${fPercent(pct)}`;
   const range = trend.fromDate && trend.toDate ? `${trend.fromDate} bis ${trend.toDate}` : `${trend.days || 120} Tage`;
   return `<span style="color:${color};font-weight:700;">${title}</span><div class="market-source">${range}</div>`;
 }
@@ -1716,6 +1717,7 @@ async function refreshSalesMaterialAverages() {
         try {
           const avg5 = await loadFallbackAverage(5);
           const avg20 = await loadFallbackAverage(20);
+          const avg120 = await loadFallbackAverage(120);
           nextMaterials[key] = {
             ...(nextMaterials[key] || {}),
             avgSell5d: avg5.avgSell,
@@ -1724,10 +1726,11 @@ async function refreshSalesMaterialAverages() {
             avgSell20d: avg20.avgSell,
             avgSell20dAt: avg20.fetchedAt,
             avgSell20dDates: avg20.dates || [],
+            stationTrend120d: avg120.trend120d,
             stationError: err.message,
           };
           fallbackUpdated++;
-          errors.push(`${material.name}: Station nicht verfügbar (${err.message}), Region-Ø genutzt`);
+          errors.push(`${material.name}: Station nicht verfügbar (${err.message}), Region-Ø und Region-Trend genutzt`);
         } catch (fallbackErr) {
           errors.push(fallbackErr.message || err.message);
         }
@@ -1738,7 +1741,7 @@ async function refreshSalesMaterialAverages() {
     salePlans = { ...current, materials: nextMaterials };
     saveSalePlanData();
     renderSalesPage();
-    const fallbackText = fallbackUpdated ? ` ${fallbackUpdated} Materialien mit Region-Fallback. Erstes Problem: ${errors[0]}` : '';
+    const fallbackText = fallbackUpdated ? ` ${fallbackUpdated} Materialien mit Region-Fallback inkl. Trend. Erstes Problem: ${errors[0]}` : '';
     const stationText = stationUpdated ? `${stationUpdated} Materialien mit station-genauem 5T/20T VWAP und 120T-Trend` : '0 Materialien mit Stationdaten';
     const status = fallbackUpdated && !stationUpdated ? 'err' : 'ok';
     const prefix = status === 'ok' ? '✓' : '!';
