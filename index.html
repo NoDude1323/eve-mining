@@ -1664,7 +1664,8 @@ async function refreshSalesMaterialAverages() {
   try {
     const current = currentSalesPlansFromUI();
     const nextMaterials = { ...(current.materials || {}) };
-    let updated = 0;
+    let stationUpdated = 0;
+    let fallbackUpdated = 0;
     const errors = [];
     for (const material of SALES_MATERIALS) {
       const key = String(material.typeId);
@@ -1710,7 +1711,7 @@ async function refreshSalesMaterialAverages() {
           stationSource: station.source,
           stationFetchedAt: station.fetchedAt,
         };
-        updated++;
+        stationUpdated++;
       } catch (err) {
         try {
           const avg5 = await loadFallbackAverage(5);
@@ -1725,19 +1726,23 @@ async function refreshSalesMaterialAverages() {
             avgSell20dDates: avg20.dates || [],
             stationError: err.message,
           };
-          updated++;
-          errors.push(`${material.name}: Station nicht verfügbar, Region-Ø genutzt`);
+          fallbackUpdated++;
+          errors.push(`${material.name}: Station nicht verfügbar (${err.message}), Region-Ø genutzt`);
         } catch (fallbackErr) {
           errors.push(fallbackErr.message || err.message);
         }
       }
     }
-    if (!updated) throw new Error(errors[0] || 'keine Stationdaten gefunden');
+    const updated = stationUpdated + fallbackUpdated;
+    if (!updated) throw new Error(errors[0] || 'keine Preiswerte gefunden');
     salePlans = { ...current, materials: nextMaterials };
     saveSalePlanData();
     renderSalesPage();
-    const errorText = errors.length ? ` ${errors.length} Materialien ohne Stationdaten. Erstes Problem: ${errors[0]}` : '';
-    showSalesMsg('ok', `✓ ${updated} Materialien mit station-genauem 5T/20T VWAP und 120T-Trend aktualisiert.${errorText}`);
+    const fallbackText = fallbackUpdated ? ` ${fallbackUpdated} Materialien mit Region-Fallback. Erstes Problem: ${errors[0]}` : '';
+    const stationText = stationUpdated ? `${stationUpdated} Materialien mit station-genauem 5T/20T VWAP und 120T-Trend` : '0 Materialien mit Stationdaten';
+    const status = fallbackUpdated && !stationUpdated ? 'err' : 'ok';
+    const prefix = status === 'ok' ? '✓' : '!';
+    showSalesMsg(status, `${prefix} ${stationText} aktualisiert.${fallbackText}`);
   } catch (err) {
     showSalesMsg('err', `Stationpreise konnten nicht geladen werden: ${err.message}`);
   }
