@@ -1658,8 +1658,21 @@ async function refreshSalesMaterialAverages() {
           headers: apiHeaders(),
           body: JSON.stringify({ stationId: SALES_STATION_ID, typeId: material.typeId, days: 20 }),
         });
-        if (!res.ok) throw new Error(`${material.name}: HTTP ${res.status}`);
-        const payload = await res.json();
+        let payload = null;
+        try { payload = await res.json(); } catch(e) {}
+        if (!res.ok) throw new Error(`${material.name}: ${payload?.error || `HTTP ${res.status}`}`);
+        if (!payload.ok || !payload.data) throw new Error(`${material.name}: ${payload.error || 'Ungültige API-Antwort'}`);
+        return payload.data;
+      };
+      const loadFallbackAverage = async (days) => {
+        const res = await fetch(apiUrl('sales-material-history'), {
+          method: 'POST',
+          headers: apiHeaders(),
+          body: JSON.stringify({ regionId: 10000043, typeId: material.typeId, days }),
+        });
+        let payload = null;
+        try { payload = await res.json(); } catch(e) {}
+        if (!res.ok) throw new Error(`${material.name}: ${payload?.error || `HTTP ${res.status}`}`);
         if (!payload.ok || !payload.data) throw new Error(`${material.name}: ${payload.error || 'Ungültige API-Antwort'}`);
         return payload.data;
       };
@@ -1682,7 +1695,24 @@ async function refreshSalesMaterialAverages() {
         };
         updated++;
       } catch (err) {
-        errors.push(err.message);
+        try {
+          const avg5 = await loadFallbackAverage(5);
+          const avg20 = await loadFallbackAverage(20);
+          nextMaterials[key] = {
+            ...(nextMaterials[key] || {}),
+            avgSell5d: avg5.avgSell,
+            avgSell5dAt: avg5.fetchedAt,
+            avgSell5dDates: avg5.dates || [],
+            avgSell20d: avg20.avgSell,
+            avgSell20dAt: avg20.fetchedAt,
+            avgSell20dDates: avg20.dates || [],
+            stationError: err.message,
+          };
+          updated++;
+          errors.push(`${material.name}: Station nicht verfügbar, Region-Ø genutzt`);
+        } catch (fallbackErr) {
+          errors.push(fallbackErr.message || err.message);
+        }
       }
     }
     if (!updated) throw new Error(errors[0] || 'keine Stationdaten gefunden');

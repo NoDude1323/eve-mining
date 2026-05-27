@@ -191,6 +191,7 @@ function fetch_text(string $url): string {
         CURLOPT_TIMEOUT => 20,
         CURLOPT_USERAGENT => 'EVE Mining Journal/1.0',
         CURLOPT_HTTPHEADER => ['Accept: text/html,application/xhtml+xml'],
+        CURLOPT_ENCODING => '',
     ]);
     $raw = curl_exec($ch);
     $err = curl_error($ch);
@@ -487,6 +488,9 @@ if ($action === 'sales-station-history') {
     try {
         $url = sprintf('https://www.adam4eve.eu/hub_type_history.php?typeID=%d&mode=min&stationID=%d', $typeId, $stationId);
         $html = fetch_text($url);
+        if (stripos($html, 'Bought from sell order') === false) {
+            throw new RuntimeException('Adam4EVE response did not contain station trade table');
+        }
         $rows = parse_adam_station_history($html);
         if (!$rows) {
             respond(404, ['ok' => false, 'error' => 'No station history data found']);
@@ -512,7 +516,10 @@ if ($action === 'sales-station-history') {
             ],
         ]);
     } catch (Throwable $e) {
-        respond(500, ['ok' => false, 'error' => 'Could not load Adam4EVE station history']);
+        respond(502, [
+            'ok' => false,
+            'error' => 'Could not load Adam4EVE station history: ' . $e->getMessage(),
+        ]);
     }
 }
 
