@@ -372,23 +372,21 @@ textarea#excludedResourcesInput:focus { border-color: var(--cyan); box-shadow: 0
 #tab-sales input[data-sale-field="note"] { max-width: 94px !important; }
 #tab-sales td:nth-child(3) .market-source,
 #tab-sales td:nth-child(4) .market-source,
-#tab-sales td:nth-child(5) .market-source,
-#tab-sales td:nth-child(6) .market-source { font-size: 10px; white-space: normal; overflow-wrap: anywhere; }
+#tab-sales td:nth-child(5) .market-source { font-size: 10px; white-space: normal; overflow-wrap: anywhere; }
 #tab-sales td:nth-child(1), #tab-sales th:nth-child(1) { width: 8%; }
 #tab-sales td:nth-child(2), #tab-sales th:nth-child(2) { width: 4%; }
 #tab-sales td:nth-child(3), #tab-sales th:nth-child(3),
 #tab-sales td:nth-child(4), #tab-sales th:nth-child(4),
-#tab-sales td:nth-child(5), #tab-sales th:nth-child(5),
-#tab-sales td:nth-child(6), #tab-sales th:nth-child(6) { width: 8%; }
-#tab-sales td:nth-child(7), #tab-sales th:nth-child(7) { width: 8%; }
+#tab-sales td:nth-child(5), #tab-sales th:nth-child(5) { width: 8%; }
+#tab-sales td:nth-child(6), #tab-sales th:nth-child(6) { width: 9%; }
+#tab-sales td:nth-child(7), #tab-sales th:nth-child(7) { width: 9%; }
 #tab-sales td:nth-child(8), #tab-sales th:nth-child(8),
 #tab-sales td:nth-child(9), #tab-sales th:nth-child(9),
-#tab-sales td:nth-child(10), #tab-sales th:nth-child(10),
-#tab-sales td:nth-child(11), #tab-sales th:nth-child(11) { width: 8%; }
-#tab-sales td:nth-child(12), #tab-sales th:nth-child(12) { width: 9%; }
-#tab-sales td:nth-child(13), #tab-sales th:nth-child(13) { width: 5%; }
-#tab-sales td:nth-child(12) label.market-source { gap: 2px !important; margin-right: 3px !important; font-size: 11px; }
-#tab-sales td:nth-child(12) input[type="checkbox"] { width: 13px; height: 13px; }
+#tab-sales td:nth-child(10), #tab-sales th:nth-child(10) { width: 8%; }
+#tab-sales td:nth-child(11), #tab-sales th:nth-child(11) { width: 9%; }
+#tab-sales td:nth-child(12), #tab-sales th:nth-child(12) { width: 6%; }
+#tab-sales td:nth-child(11) label.market-source { gap: 2px !important; margin-right: 3px !important; font-size: 11px; }
+#tab-sales td:nth-child(11) input[type="checkbox"] { width: 13px; height: 13px; }
 
 .btn {
   border: none;
@@ -742,7 +740,6 @@ textarea#excludedResourcesInput:focus { border-color: var(--cyan); box-shadow: 0
             <th>TypeID</th>
             <th>Station 5T VWAP</th>
             <th>Station 20T VWAP</th>
-            <th>20T Volumen</th>
             <th>Empfehlung</th>
             <th>Tatsächlicher Verkaufspreis</th>
             <th>Solo Alvandeus-Gruppe</th>
@@ -1559,8 +1556,6 @@ function renderSalesMaterialsTable() {
     const plan = salesPlanFor(material.typeId);
     const station5 = plan.stationVwap5d ? fUnitISKPrecise(plan.stationVwap5d) : (plan.avgSell5d ? fUnitISKPrecise(plan.avgSell5d) : '—');
     const station20 = plan.stationVwap20d ? fUnitISKPrecise(plan.stationVwap20d) : (plan.avgSell20d ? fUnitISKPrecise(plan.avgSell20d) : '—');
-    const hasStationData = !!(Number(plan.stationVwap20d) || Number(plan.stationVwap5d));
-    const stationVolume = plan.stationVolume20d ? fInputAmount(plan.stationVolume20d) : (plan.stationError ? 'Fallback' : '—');
     const recommendation = salesPriceRecommendation(plan);
     const recommendationText = recommendation.price ? fUnitISKPrecise(recommendation.price) : '—';
     const recommendationMeta = recommendation.basis ? `${recommendation.basis} · ${recommendation.quality}` : '';
@@ -1570,9 +1565,6 @@ function renderSalesMaterialsTable() {
     };
     const meta5 = plan.stationLastDate ? `bis ${plan.stationLastDate}` : rangeLabel(plan.avgSell5dDates, plan.avgSell5dAt);
     const meta20 = plan.stationLastDate ? `bis ${plan.stationLastDate}` : rangeLabel(plan.avgSell20dDates, plan.avgSell20dAt);
-    const volumeMeta = plan.stationTrades20d
-      ? `${fInputAmount(plan.stationTrades20d)} Trades`
-      : (plan.stationError ? 'Region-Ø genutzt' : '');
     const soloInputs = SALES_GROUPS.map(group => {
       const soloValue = plan.soloAmounts?.[group.id] ?? plan.amounts?.[group.id] ?? '';
       return `<td><input class="price-input" data-sale-material="${key}" data-sale-solo-group="${group.id}" value="${fInputAmount(soloValue)}" placeholder="Solo" oninput="renderSalesPayoutCards()" onblur="formatAmountInput(this);renderSalesPayoutCards()"></td>`;
@@ -1584,7 +1576,6 @@ function renderSalesMaterialsTable() {
       <td>${material.typeId}</td>
       <td><span style="color:var(--gold)">${station5}</span><div class="market-source">${meta5}</div></td>
       <td><span style="color:var(--cyan)">${station20}</span><div class="market-source">${meta20}</div></td>
-      <td><span style="color:${hasStationData ? 'var(--text)' : 'var(--gold)'}">${stationVolume}</span><div class="market-source">${volumeMeta}</div></td>
       <td><span style="color:var(--green)">${recommendationText}</span><div class="market-source">${recommendationMeta}</div></td>
       <td><input class="price-input" data-sale-material="${key}" data-sale-field="actualPrice" value="${fISKInput(plan.actualPrice)}" placeholder="ISK/Stück, z.B. 3,66" oninput="renderSalesPayoutCards()" onblur="formatISKInput(this);renderSalesPayoutCards()"></td>
       ${soloInputs}
