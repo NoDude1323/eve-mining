@@ -1538,10 +1538,15 @@ function salesPriceRecommendation(plan) {
   const station5 = Number(plan.stationVwap5d) || 0;
   const fallback20 = Number(plan.avgSell20d) || 0;
   const fallback5 = Number(plan.avgSell5d) || 0;
-  const price = station20 || station5 || fallback20 || fallback5;
+  const weightedPrice = (shortPrice, longPrice) => {
+    if (shortPrice > 0 && longPrice > 0) return (shortPrice * 0.7) + (longPrice * 0.3);
+    return shortPrice || longPrice || 0;
+  };
+  const hasStation = station5 > 0 || station20 > 0;
+  const price = hasStation ? weightedPrice(station5, station20) : weightedPrice(fallback5, fallback20);
   const trades = Number(plan.stationTrades20d) || 0;
   const volume = Number(plan.stationVolume20d) || 0;
-  const basis = station20 || station5 ? 'Station-VWAP' : price ? 'Region-Ø' : '';
+  const basis = hasStation ? 'Station 70/30' : price ? 'Region 70/30' : '';
   let quality = 'keine Daten';
   if (trades >= 50 || volume >= 10000000) quality = 'gut';
   else if (trades >= 15 || volume >= 1000000) quality = 'mittel';
