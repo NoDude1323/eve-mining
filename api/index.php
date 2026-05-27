@@ -179,12 +179,137 @@ function fetch_json(string $url): array {
     return $decoded;
 }
 
+function fetch_text(string $url): string {
+    if (!extension_loaded('curl')) {
+        respond(500, ['ok' => false, 'error' => 'PHP curl extension is not enabled']);
+    }
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_CONNECTTIMEOUT => 8,
+        CURLOPT_TIMEOUT => 20,
+        CURLOPT_USERAGENT => 'EVE Mining Journal/1.0',
+        CURLOPT_HTTPHEADER => ['Accept: text/html,application/xhtml+xml'],
+    ]);
+    $raw = curl_exec($ch);
+    $err = curl_error($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($raw === false || $status < 200 || $status >= 300) {
+        throw new RuntimeException($err !== '' ? $err : 'HTTP ' . $status);
+    }
+    return (string)$raw;
+}
+
 function numeric_price($value): ?float {
     if (!is_numeric($value)) {
         return null;
     }
     $price = (float)$value;
     return $price > 0 ? $price : null;
+}
+
+function adam_number(string $value): float {
+    $raw = html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $raw = trim(preg_replace('/[^\d,.\-]/', '', $raw) ?? '');
+    if ($raw === '' || $raw === '-') {
+        return 0.0;
+    }
+    if (strpos($raw, ',') !== false) {
+        $raw = str_replace('.', '', $raw);
+        $raw = str_replace(',', '.', $raw);
+    } elseif (substr_count($raw, '.') > 1 || preg_match('/^\d{1,3}(\.\d{3})+$/', $raw)) {
+        $raw = str_replace('.', '', $raw);
+    }
+    return (float)$raw;
+}
+
+function adam_text(string $value): string {
+    return trim(html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+}
+
+function median(array $values): ?float {
+    $values = array_values(array_filter($values, static fn($v) => is_numeric($v)));
+    if (!$values) {
+        return null;
+    }
+    sort($values, SORT_NUMERIC);
+    $count = count($values);
+    $mid = intdiv($count, 2);
+    return $count % 2 ? (float)$values[$mid] : ((float)$values[$mid - 1] + (float)$values[$mid]) / 2;
+}
+
+function parse_adam_station_history(string $html): array {
+    preg_match_all('/<tr\s+class="highlight"\s*>(.*?)<\/tr>/is', $html, $matches);
+    $rows = [];
+    foreach ($matches[1] as $rowHtml) {
+        preg_match_all('/<td\b[^>]*>(.*?)<\/td>/is', $rowHtml, $cells);
+        if (count($cells[1]) < 13) {
+            continue;
+        }
+        $date = adam_text($cells[1][0]);
+        $sellQuantity = adam_number($cells[1][8]);
+        $sellValue = adam_number($cells[1][9]);
+        $sellAvg = adam_number($cells[1][11]);
+        $unit = $sellQuantity > 0 && $sellValue > 0 ? $sellValue / $sellQuantity : $sellAvg;
+        if ($date === '' || $sellQuantity <= 0 || $unit <= 0) {
+            continue;
+        }
+        $rows[] = [
+            'date' => $date,
+            'trades' => (int)adam_number($cells[1][7]),
+            'quantity' => (int)round($sellQuantity),
+            'value' => $sellValue > 0 ? $sellValue : $unit * $sellQuantity,
+            'avg' => $sellAvg,
+            'unit' => $unit,
+            'high' => adam_number($cells[1][10]),
+            'low' => adam_number($cells[1][12]),
+        ];
+    }
+    usort($rows, static fn($a, $b) => strcmp((string)$b['date'], (string)$a['date']));
+    return $rows;
+}
+
+function adam_station_summary(array $rows, int $days): array {
+    $recent = array_slice($rows, 0, $days);
+    $prices = array_map(static fn($row) => (float)$row['unit'], $recent);
+    $median = median($prices);
+    $filtered = $recent;
+    if ($median !== null && count($recent) >= 5) {
+        $lower = $median * 0.75;
+        $upper = $median * 1.25;
+        $candidate = array_values(array_filter($recent, static function ($row) use ($lower, $upper) {
+            $unit = (float)$row['unit'];
+            return $unit >= $lower && $unit <= $upper;
+        }));
+        if (count($candidate) >= max(3, (int)floor(count($recent) * 0.6))) {
+            $filtered = $candidate;
+        }
+    }
+
+    $quantity = 0;
+    $value = 0.0;
+    $trades = 0;
+    $dates = [];
+    foreach ($filtered as $row) {
+        $quantity += (int)$row['quantity'];
+        $value += (float)$row['value'];
+        $trades += (int)$row['trades'];
+        $dates[] = $row['date'];
+    }
+    return [
+        'days' => count($filtered),
+        'requestedDays' => $days,
+        'price' => $quantity > 0 ? $value / $quantity : null,
+        'quantity' => $quantity,
+        'value' => $value,
+        'trades' => $trades,
+        'median' => $median,
+        'dates' => $dates,
+        'lastDate' => $dates[0] ?? null,
+    ];
 }
 
 $config = read_config();
@@ -341,6 +466,53 @@ if ($action === 'sales-material-history') {
         ]);
     } catch (Throwable $e) {
         respond(500, ['ok' => false, 'error' => 'Could not load market history']);
+    }
+}
+
+if ($action === 'sales-station-history') {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        respond(405, ['ok' => false, 'error' => 'POST required']);
+    }
+    $body = json_decode(file_get_contents('php://input') ?: '', true);
+    if (!is_array($body)) {
+        respond(400, ['ok' => false, 'error' => 'Invalid JSON body']);
+    }
+    $typeId = (int)($body['typeId'] ?? 34);
+    $stationId = (int)($body['stationId'] ?? 60008494);
+    $days = max(1, min(30, (int)($body['days'] ?? 20)));
+    if ($typeId <= 0 || $stationId <= 0) {
+        respond(400, ['ok' => false, 'error' => 'Invalid stationId or typeId']);
+    }
+
+    try {
+        $url = sprintf('https://www.adam4eve.eu/hub_type_history.php?typeID=%d&mode=min&stationID=%d', $typeId, $stationId);
+        $html = fetch_text($url);
+        $rows = parse_adam_station_history($html);
+        if (!$rows) {
+            respond(404, ['ok' => false, 'error' => 'No station history data found']);
+        }
+        $summary5 = adam_station_summary($rows, min(5, $days));
+        $summary20 = adam_station_summary($rows, $days);
+        respond(200, [
+            'ok' => true,
+            'data' => [
+                'stationId' => $stationId,
+                'typeId' => $typeId,
+                'days' => $days,
+                'stationVwap5d' => $summary5['price'],
+                'stationVwap20d' => $summary20['price'],
+                'stationVolume5d' => $summary5['quantity'],
+                'stationVolume20d' => $summary20['quantity'],
+                'stationTrades20d' => $summary20['trades'],
+                'lastDate' => $summary20['lastDate'],
+                'dates' => $summary20['dates'],
+                'basis' => 'Adam4EVE station Bought from sell order VWAP, outlier-trimmed around median',
+                'source' => $url,
+                'fetchedAt' => gmdate('Y-m-d H:i'),
+            ],
+        ]);
+    } catch (Throwable $e) {
+        respond(500, ['ok' => false, 'error' => 'Could not load Adam4EVE station history']);
     }
 }
 
