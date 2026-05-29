@@ -1422,7 +1422,8 @@ async function refreshMarketPricesFromApi() {
     const buyCount = Object.keys(buyPrices).length;
     const sellCount = Object.keys(sellPrices).length;
     const errors = payload.data.errors?.length ? ` (${payload.data.errors.length} ohne Preis)` : '';
-    showMarketMsg('ok', `✓ ${buyCount} Buy-Preise und ${sellCount} Sell-Preise von EVE Tycoon aktualisiert${errors}.`);
+    const cacheText = payload.data.cached ? ` aus DB-Cache vom ${payload.data.cacheFetchedAt}` : ' von EVE Tycoon';
+    showMarketMsg('ok', `✓ ${buyCount} Buy-Preise und ${sellCount} Sell-Preise${cacheText} aktualisiert${errors}.`);
   } catch (err) {
     showMarketMsg('err', `EVE-Tycoon-Preise konnten nicht geladen werden: ${err.message}`);
   }
@@ -1658,6 +1659,8 @@ async function refreshSalesMaterialAverages() {
     const nextMaterials = { ...(current.materials || {}) };
     let stationUpdated = 0;
     let fallbackUpdated = 0;
+    let stationCacheUsed = 0;
+    let fallbackCacheUsed = 0;
     const errors = [];
     for (const material of SALES_MATERIALS) {
       const key = String(material.typeId);
@@ -1702,13 +1705,17 @@ async function refreshSalesMaterialAverages() {
           stationBasis: station.basis,
           stationSource: station.source,
           stationFetchedAt: station.fetchedAt,
+          stationCached: !!station.cached,
+          stationCacheFetchedAt: station.cacheFetchedAt || '',
         };
         stationUpdated++;
+        if (station.cached) stationCacheUsed++;
       } catch (err) {
         try {
           const avg5 = await loadFallbackAverage(5);
           const avg20 = await loadFallbackAverage(20);
           const avg120 = await loadFallbackAverage(120);
+          const usedCachedFallback = !!(avg5.cached || avg20.cached || avg120.cached);
           nextMaterials[key] = {
             ...(nextMaterials[key] || {}),
             avgSell5d: avg5.avgSell,
@@ -1719,8 +1726,11 @@ async function refreshSalesMaterialAverages() {
             avgSell20dDates: avg20.dates || [],
             stationTrend120d: avg120.trend120d,
             stationError: err.message,
+            regionCached: usedCachedFallback,
+            regionCacheFetchedAt: avg120.cacheFetchedAt || avg20.cacheFetchedAt || avg5.cacheFetchedAt || '',
           };
           fallbackUpdated++;
+          if (usedCachedFallback) fallbackCacheUsed++;
           errors.push(`${material.name}: Station nicht verfügbar (${err.message}), Region-Ø und Region-Trend genutzt`);
         } catch (fallbackErr) {
           errors.push(fallbackErr.message || err.message);
@@ -1732,8 +1742,10 @@ async function refreshSalesMaterialAverages() {
     salePlans = { ...current, materials: nextMaterials };
     saveSalePlanData();
     renderSalesPage();
-    const fallbackText = fallbackUpdated ? ` ${fallbackUpdated} Materialien mit Region-Fallback inkl. Trend. Erstes Problem: ${errors[0]}` : '';
-    const stationText = stationUpdated ? `${stationUpdated} Materialien mit station-genauem 5T/20T VWAP und 120T-Trend` : '0 Materialien mit Stationdaten';
+    const fallbackCacheText = fallbackCacheUsed ? `, davon ${fallbackCacheUsed} aus DB-Cache` : '';
+    const stationCacheText = stationCacheUsed ? `, davon ${stationCacheUsed} aus DB-Cache` : '';
+    const fallbackText = fallbackUpdated ? ` ${fallbackUpdated} Materialien mit Region-Fallback inkl. Trend${fallbackCacheText}. Erstes Problem: ${errors[0]}` : '';
+    const stationText = stationUpdated ? `${stationUpdated} Materialien mit station-genauem 5T/20T VWAP und 120T-Trend${stationCacheText}` : '0 Materialien mit Stationdaten';
     const status = fallbackUpdated && !stationUpdated ? 'err' : 'ok';
     const prefix = status === 'ok' ? '✓' : '!';
     showSalesMsg(status, `${prefix} ${stationText} aktualisiert.${fallbackText}`);

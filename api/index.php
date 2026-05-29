@@ -66,6 +66,14 @@ function pdo_or_null(array $config): ?PDO {
           updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
     );
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS eve_market_cache (
+          cache_key VARCHAR(191) NOT NULL PRIMARY KEY,
+          source VARCHAR(64) NOT NULL,
+          payload_json LONGTEXT NOT NULL,
+          fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+    );
     return $pdo;
 }
 
@@ -149,6 +157,49 @@ function save_mysql_state(PDO $pdo, array $state): void {
         $pdo->rollBack();
         throw $e;
     }
+}
+
+function market_cache_key(string $source, array $parts): string {
+    ksort($parts);
+    return $source . ':' . sha1(json_encode($parts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+}
+
+function save_market_cache(?PDO $pdo, string $cacheKey, string $source, array $payload): void {
+    if (!$pdo instanceof PDO) {
+        return;
+    }
+    $stmt = $pdo->prepare(
+        'INSERT INTO eve_market_cache (cache_key, source, payload_json)
+         VALUES (:cache_key, :source, :payload_json)
+         ON DUPLICATE KEY UPDATE source = VALUES(source), payload_json = VALUES(payload_json), fetched_at = CURRENT_TIMESTAMP'
+    );
+    $stmt->execute([
+        ':cache_key' => $cacheKey,
+        ':source' => $source,
+        ':payload_json' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+    ]);
+}
+
+function load_market_cache(?PDO $pdo, string $cacheKey, string $reason = ''): ?array {
+    if (!$pdo instanceof PDO) {
+        return null;
+    }
+    $stmt = $pdo->prepare('SELECT payload_json, fetched_at FROM eve_market_cache WHERE cache_key = :cache_key LIMIT 1');
+    $stmt->execute([':cache_key' => $cacheKey]);
+    $row = $stmt->fetch();
+    if (!$row) {
+        return null;
+    }
+    $payload = json_decode((string)$row['payload_json'], true);
+    if (!is_array($payload)) {
+        return null;
+    }
+    $payload['cached'] = true;
+    $payload['cacheFetchedAt'] = $row['fetched_at'];
+    if ($reason !== '') {
+        $payload['cacheReason'] = $reason;
+    }
+    return $payload;
 }
 
 function fetch_json(string $url): array {
@@ -500,6 +551,19 @@ if ($action === 'market-prices') {
     if ($regionId <= 0 || !is_array($items)) {
         respond(400, ['ok' => false, 'error' => 'Invalid region or items']);
     }
+    $cacheItems = [];
+    foreach ($items as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $typeId = (int)($item['oreId'] ?? $item['typeId'] ?? 0);
+        $ore = trim((string)($item['ore'] ?? $item['name'] ?? ''));
+        if ($typeId > 0) {
+            $cacheItems[] = $typeId . ':' . $ore;
+        }
+    }
+    sort($cacheItems, SORT_STRING);
+    $cacheKey = market_cache_key('market-prices', ['regionId' => $regionId, 'items' => implode('|', $cacheItems)]);
 
     $buyPrices = [];
     $sellPrices = [];
@@ -545,18 +609,25 @@ if ($action === 'market-prices') {
         }
     }
 
-    respond(200, [
-        'ok' => true,
-        'data' => [
-            'regionId' => $regionId,
-            'basis' => 'EVE Tycoon market stats buyAvgFivePercent/sellAvgFivePercent',
-            'buyPrices' => $buyPrices,
-            'sellPrices' => $sellPrices,
-            'byTypeId' => $byTypeId,
-            'errors' => $errors,
-            'fetchedAt' => gmdate('c'),
-        ],
-    ]);
+    $data = [
+        'regionId' => $regionId,
+        'basis' => 'EVE Tycoon market stats buyAvgFivePercent/sellAvgFivePercent',
+        'buyPrices' => $buyPrices,
+        'sellPrices' => $sellPrices,
+        'byTypeId' => $byTypeId,
+        'errors' => $errors,
+        'fetchedAt' => gmdate('c'),
+    ];
+    if ($buyPrices || $sellPrices) {
+        save_market_cache($pdo, $cacheKey, 'market-prices', $data);
+    } else {
+        $cached = load_market_cache($pdo, $cacheKey, 'EVE Tycoon market stats nicht erreichbar');
+        if ($cached !== null) {
+            respond(200, ['ok' => true, 'data' => $cached]);
+        }
+    }
+
+    respond(200, ['ok' => true, 'data' => $data]);
 }
 
 if ($action === 'sales-material-history') {
@@ -573,6 +644,7 @@ if ($action === 'sales-material-history') {
     if ($regionId <= 0 || $typeId <= 0) {
         respond(400, ['ok' => false, 'error' => 'Invalid region or typeId']);
     }
+    $cacheKey = market_cache_key('sales-material-history', ['regionId' => $regionId, 'typeId' => $typeId, 'days' => $days]);
 
     try {
         $url = sprintf('https://evetycoon.com/api/v1/market/history/%d/%d', $regionId, $typeId);
@@ -584,28 +656,31 @@ if ($action === 'sales-material-history') {
             return isset($row['average']) && is_numeric($row['average']) && (float)$row['average'] > 0;
         })), 0, $days);
         if (!$recent) {
-            respond(404, ['ok' => false, 'error' => 'No history data found']);
+            throw new RuntimeException('No history data found');
         }
         $summary = market_history_average($recent);
         $trend120 = market_history_trend(array_values(array_filter($history, static function ($row) {
             return isset($row['average']) && is_numeric($row['average']) && (float)$row['average'] > 0;
         })), min(120, $days));
-        respond(200, [
-            'ok' => true,
-            'data' => [
-                'regionId' => $regionId,
-                'typeId' => $typeId,
-                'days' => count($recent),
-                'avgSell' => $summary['price'],
-                'volume' => $summary['volume'],
-                'dates' => $summary['dates'],
-                'trend120d' => $trend120,
-                'basis' => 'EVE Tycoon market history average over newest days',
-                'fetchedAt' => gmdate('Y-m-d H:i'),
-            ],
-        ]);
+        $data = [
+            'regionId' => $regionId,
+            'typeId' => $typeId,
+            'days' => count($recent),
+            'avgSell' => $summary['price'],
+            'volume' => $summary['volume'],
+            'dates' => $summary['dates'],
+            'trend120d' => $trend120,
+            'basis' => 'EVE Tycoon market history average over newest days',
+            'fetchedAt' => gmdate('Y-m-d H:i'),
+        ];
+        save_market_cache($pdo, $cacheKey, 'sales-material-history', $data);
+        respond(200, ['ok' => true, 'data' => $data]);
     } catch (Throwable $e) {
-        respond(500, ['ok' => false, 'error' => 'Could not load market history']);
+        $cached = load_market_cache($pdo, $cacheKey, 'EVE Tycoon market history nicht erreichbar: ' . $e->getMessage());
+        if ($cached !== null) {
+            respond(200, ['ok' => true, 'data' => $cached]);
+        }
+        respond(500, ['ok' => false, 'error' => 'Could not load market history: ' . $e->getMessage()]);
     }
 }
 
@@ -623,6 +698,7 @@ if ($action === 'sales-station-history') {
     if ($typeId <= 0 || $stationId <= 0) {
         respond(400, ['ok' => false, 'error' => 'Invalid stationId or typeId']);
     }
+    $cacheKey = market_cache_key('sales-station-history', ['stationId' => $stationId, 'typeId' => $typeId, 'days' => $days]);
 
     try {
         $url = sprintf('https://www.adam4eve.eu/hub_type_history.php?typeID=%d&mode=min&stationID=%d', $typeId, $stationId);
@@ -632,31 +708,34 @@ if ($action === 'sales-station-history') {
         }
         $rows = parse_adam_station_history($html);
         if (!$rows) {
-            respond(404, ['ok' => false, 'error' => 'No station history data found']);
+            throw new RuntimeException('No station history data found');
         }
         $summary5 = adam_station_summary($rows, min(5, $days));
         $summary20 = adam_station_summary($rows, min(20, $days));
         $trend120 = adam_station_trend($rows, min(120, $days));
-        respond(200, [
-            'ok' => true,
-            'data' => [
-                'stationId' => $stationId,
-                'typeId' => $typeId,
-                'days' => $days,
-                'stationVwap5d' => $summary5['price'],
-                'stationVwap20d' => $summary20['price'],
-                'stationVolume5d' => $summary5['quantity'],
-                'stationVolume20d' => $summary20['quantity'],
-                'stationTrades20d' => $summary20['trades'],
-                'stationTrend120d' => $trend120,
-                'lastDate' => $summary20['lastDate'],
-                'dates' => $summary20['dates'],
-                'basis' => 'Adam4EVE station Bought from sell order VWAP, outlier-trimmed around median',
-                'source' => $url,
-                'fetchedAt' => gmdate('Y-m-d H:i'),
-            ],
-        ]);
+        $data = [
+            'stationId' => $stationId,
+            'typeId' => $typeId,
+            'days' => $days,
+            'stationVwap5d' => $summary5['price'],
+            'stationVwap20d' => $summary20['price'],
+            'stationVolume5d' => $summary5['quantity'],
+            'stationVolume20d' => $summary20['quantity'],
+            'stationTrades20d' => $summary20['trades'],
+            'stationTrend120d' => $trend120,
+            'lastDate' => $summary20['lastDate'],
+            'dates' => $summary20['dates'],
+            'basis' => 'Adam4EVE station Bought from sell order VWAP, outlier-trimmed around median',
+            'source' => $url,
+            'fetchedAt' => gmdate('Y-m-d H:i'),
+        ];
+        save_market_cache($pdo, $cacheKey, 'sales-station-history', $data);
+        respond(200, ['ok' => true, 'data' => $data]);
     } catch (Throwable $e) {
+        $cached = load_market_cache($pdo, $cacheKey, 'Adam4EVE station history nicht erreichbar: ' . $e->getMessage());
+        if ($cached !== null) {
+            respond(200, ['ok' => true, 'data' => $cached]);
+        }
         respond(502, [
             'ok' => false,
             'error' => 'Could not load Adam4EVE station history: ' . $e->getMessage(),
