@@ -643,7 +643,7 @@ textarea#excludedResourcesInput:focus { border-color: var(--cyan); box-shadow: 0
     <div class="card-header">Marktpreise pro Ressource</div>
     <div class="format-hint">
       <strong style="color:var(--cyan);">Marktwert-Modus:</strong><br>
-      Trage den 30-Tage-Durchschnittspreis pro Einheit getrennt für Sofortverkauf und eigene Sell-Order ein. Leere Felder nutzen weiter den Mining-Ledger-Schätzwert.<br>
+      Aktualisiere die aktuellen ESI Market Orders pro Einheit getrennt für Sofortverkauf und eigene Sell-Order. Leere Felder nutzen weiter den Mining-Ledger-Schätzwert.<br>
       Beim Sofortverkauf wird nur Sales Tax abgezogen; bei eigener Sell-Order werden Sales Tax und Broker Fee abgezogen.
     </div>
     <div class="msg-box" id="marketMsg"></div>
@@ -691,14 +691,14 @@ textarea#excludedResourcesInput:focus { border-color: var(--cyan); box-shadow: 0
       </table>
     </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:14px;">
-      <button class="btn btn-primary btn-sm" onclick="refreshMarketPricesFromApi()">↻ EVE Tycoon Preise aktualisieren</button>
+      <button class="btn btn-primary btn-sm" onclick="refreshMarketPricesFromApi()">↻ ESI Orders aktualisieren</button>
       <label class="btn btn-primary btn-sm" style="cursor:pointer;">
         ⇩ Marktpreis-Datei importieren
         <input id="marketPriceFile" type="file" accept=".csv,.tsv,.json,.txt" onchange="importMarketPriceFile(event)" style="display:none;">
       </label>
       <button class="btn btn-primary btn-sm" onclick="exportMarketPriceTemplate()">↑ Vorlage aus aktuellem Tab exportieren</button>
       <button class="btn btn-primary btn-sm" onclick="saveMarketPricesFromUI()">✓ Marktpreise speichern</button>
-      <span class="market-source" style="align-self:center;color:var(--muted);">Automatisch per EVE Tycoon oder als CSV/TSV/JSON mit Ressource, TypeID, Buy-Preis und Sell-Preis pro Einheit.</span>
+      <span class="market-source" style="align-self:center;color:var(--muted);">Automatisch per ESI Market Orders oder als CSV/TSV/JSON mit Ressource, TypeID, Buy-Preis und Sell-Preis pro Einheit.</span>
       <button class="btn btn-danger btn-sm" onclick="clearMarketPrices()">✕ Marktpreise leeren</button>
     </div>
   </div>
@@ -1385,7 +1385,7 @@ function saveMarketPricesFromUI() {
 }
 async function refreshMarketPricesFromApi() {
   if (!API_BASE_URL) {
-    showMarketMsg('err', 'PHP-API ist noch nicht verbunden. Trage oben im Script API_BASE_URL ein, damit EVE-Tycoon-Preise geladen werden können.');
+    showMarketMsg('err', 'PHP-API ist noch nicht verbunden. Trage oben im Script API_BASE_URL ein, damit ESI-Orders geladen werden können.');
     return;
   }
   syncMarketSettingsFromUI();
@@ -1397,7 +1397,7 @@ async function refreshMarketPricesFromApi() {
     return;
   }
 
-  showMarketMsg('ok', 'EVE-Tycoon-Preise werden geladen...');
+  showMarketMsg('ok', 'ESI-Orders werden geladen...');
   try {
     const res = await fetch(apiUrl('market-prices'), {
       method: 'POST',
@@ -1422,10 +1422,10 @@ async function refreshMarketPricesFromApi() {
     const buyCount = Object.keys(buyPrices).length;
     const sellCount = Object.keys(sellPrices).length;
     const errors = payload.data.errors?.length ? ` (${payload.data.errors.length} ohne Preis)` : '';
-    const cacheText = payload.data.cached ? ` aus DB-Cache vom ${payload.data.cacheFetchedAt}` : ' von EVE Tycoon';
+    const cacheText = payload.data.cached ? ` aus DB-Cache vom ${payload.data.cacheFetchedAt}` : ' aus ESI Orders';
     showMarketMsg('ok', `✓ ${buyCount} Buy-Preise und ${sellCount} Sell-Preise${cacheText} aktualisiert${errors}.`);
   } catch (err) {
-    showMarketMsg('err', `EVE-Tycoon-Preise konnten nicht geladen werden: ${err.message}`);
+    showMarketMsg('err', `ESI-Orders konnten nicht geladen werden: ${err.message}`);
   }
 }
 function syncMarketSettingsFromUI() {

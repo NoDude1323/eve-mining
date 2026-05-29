@@ -230,6 +230,43 @@ function fetch_json(string $url): array {
     return $decoded;
 }
 
+function fetch_json_with_headers(string $url): array {
+    if (!extension_loaded('curl')) {
+        respond(500, ['ok' => false, 'error' => 'PHP curl extension is not enabled']);
+    }
+    $headers = [];
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_CONNECTTIMEOUT => 8,
+        CURLOPT_TIMEOUT => 20,
+        CURLOPT_USERAGENT => 'EVE Mining Journal/1.0',
+        CURLOPT_HTTPHEADER => ['Accept: application/json'],
+        CURLOPT_HEADERFUNCTION => static function ($ch, string $header) use (&$headers): int {
+            $len = strlen($header);
+            $parts = explode(':', $header, 2);
+            if (count($parts) === 2) {
+                $headers[strtolower(trim($parts[0]))] = trim($parts[1]);
+            }
+            return $len;
+        },
+    ]);
+    $raw = curl_exec($ch);
+    $err = curl_error($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($raw === false || $status < 200 || $status >= 300) {
+        throw new RuntimeException($err !== '' ? $err : 'HTTP ' . $status);
+    }
+    $decoded = json_decode((string)$raw, true);
+    if (!is_array($decoded)) {
+        throw new RuntimeException('Invalid JSON response');
+    }
+    return ['data' => $decoded, 'headers' => $headers, 'status' => $status];
+}
+
 function fetch_text(string $url): string {
     if (!extension_loaded('curl')) {
         respond(500, ['ok' => false, 'error' => 'PHP curl extension is not enabled']);
@@ -267,6 +304,47 @@ function numeric_price($value): ?float {
     }
     $price = (float)$value;
     return $price > 0 ? $price : null;
+}
+
+function fetch_esi_market_orders(int $regionId, int $typeId, string $orderType): array {
+    $orders = [];
+    $page = 1;
+    $pages = 1;
+    do {
+        $url = sprintf(
+            'https://esi.evetech.net/latest/markets/%d/orders/?datasource=tranquility&order_type=%s&type_id=%d&page=%d',
+            $regionId,
+            rawurlencode($orderType),
+            $typeId,
+            $page
+        );
+        $response = fetch_json_with_headers($url);
+        $orders = array_merge($orders, $response['data']);
+        $pagesHeader = $response['headers']['x-pages'] ?? null;
+        $pages = $pagesHeader !== null ? max(1, min(50, (int)$pagesHeader)) : 1;
+        $page++;
+    } while ($page <= $pages);
+    return $orders;
+}
+
+function summarize_esi_market_orders(array $buyOrders, array $sellOrders): array {
+    $buyOrders = array_values(array_filter($buyOrders, static fn($order) => !empty($order['is_buy_order']) && numeric_price($order['price'] ?? null) !== null));
+    $sellOrders = array_values(array_filter($sellOrders, static fn($order) => empty($order['is_buy_order']) && numeric_price($order['price'] ?? null) !== null));
+
+    usort($buyOrders, static fn($a, $b) => (float)$b['price'] <=> (float)$a['price']);
+    usort($sellOrders, static fn($a, $b) => (float)$a['price'] <=> (float)$b['price']);
+
+    $buyVolume = array_sum(array_map(static fn($order) => (int)($order['volume_remain'] ?? 0), $buyOrders));
+    $sellVolume = array_sum(array_map(static fn($order) => (int)($order['volume_remain'] ?? 0), $sellOrders));
+
+    return [
+        'buy' => isset($buyOrders[0]) ? (float)$buyOrders[0]['price'] : null,
+        'sell' => isset($sellOrders[0]) ? (float)$sellOrders[0]['price'] : null,
+        'buyVolume' => $buyVolume,
+        'sellVolume' => $sellVolume,
+        'buyOrderCount' => count($buyOrders),
+        'sellOrderCount' => count($sellOrders),
+    ];
 }
 
 function adam_number(string $value): float {
@@ -580,11 +658,14 @@ if ($action === 'market-prices') {
             continue;
         }
 
-        $url = sprintf('https://evetycoon.com/api/v1/market/stats/%d/%d', $regionId, $typeId);
+        $buyUrl = sprintf('https://esi.evetech.net/latest/markets/%d/orders/?datasource=tranquility&order_type=buy&type_id=%d', $regionId, $typeId);
+        $sellUrl = sprintf('https://esi.evetech.net/latest/markets/%d/orders/?datasource=tranquility&order_type=sell&type_id=%d', $regionId, $typeId);
         try {
-            $stats = fetch_json($url);
-            $buy = numeric_price($stats['buyAvgFivePercent'] ?? null) ?? numeric_price($stats['maxBuy'] ?? null);
-            $sell = numeric_price($stats['sellAvgFivePercent'] ?? null) ?? numeric_price($stats['minSell'] ?? null);
+            $buyOrders = fetch_esi_market_orders($regionId, $typeId, 'buy');
+            $sellOrders = fetch_esi_market_orders($regionId, $typeId, 'sell');
+            $summary = summarize_esi_market_orders($buyOrders, $sellOrders);
+            $buy = numeric_price($summary['buy'] ?? null);
+            $sell = numeric_price($summary['sell'] ?? null);
 
             if ($buy !== null) {
                 $buyPrices[$ore] = $buy;
@@ -600,9 +681,13 @@ if ($action === 'market-prices') {
                 'ore' => $ore,
                 'buy' => $buy,
                 'sell' => $sell,
-                'buyVolume' => $stats['buyVolume'] ?? null,
-                'sellVolume' => $stats['sellVolume'] ?? null,
-                'source' => $url,
+                'buyVolume' => $summary['buyVolume'] ?? null,
+                'sellVolume' => $summary['sellVolume'] ?? null,
+                'buyOrderCount' => $summary['buyOrderCount'] ?? null,
+                'sellOrderCount' => $summary['sellOrderCount'] ?? null,
+                'source' => 'ESI market orders',
+                'buySource' => $buyUrl,
+                'sellSource' => $sellUrl,
             ];
         } catch (Throwable $e) {
             $errors[] = ['ore' => $ore, 'typeId' => $typeId, 'error' => $e->getMessage()];
@@ -611,7 +696,7 @@ if ($action === 'market-prices') {
 
     $data = [
         'regionId' => $regionId,
-        'basis' => 'EVE Tycoon market stats buyAvgFivePercent/sellAvgFivePercent',
+        'basis' => 'ESI market orders highest buy / lowest sell',
         'buyPrices' => $buyPrices,
         'sellPrices' => $sellPrices,
         'byTypeId' => $byTypeId,
@@ -621,7 +706,7 @@ if ($action === 'market-prices') {
     if ($buyPrices || $sellPrices) {
         save_market_cache($pdo, $cacheKey, 'market-prices', $data);
     } else {
-        $cached = load_market_cache($pdo, $cacheKey, 'EVE Tycoon market stats nicht erreichbar');
+        $cached = load_market_cache($pdo, $cacheKey, 'ESI market orders nicht erreichbar');
         if ($cached !== null) {
             respond(200, ['ok' => true, 'data' => $cached]);
         }
