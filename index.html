@@ -717,10 +717,10 @@ textarea#excludedResourcesInput:focus { border-color: var(--cyan); box-shadow: 0
     <div class="stats-grid" id="salesPayoutCards"></div>
 
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;margin-top:18px;">
-      <button class="btn btn-primary btn-sm" onclick="refreshSalesMaterialAverages()">↻ Stationpreise aktualisieren</button>
+      <button class="btn btn-primary btn-sm" onclick="refreshSalesMaterialAverages()">↻ ESI-Preise aktualisieren</button>
       <button class="btn btn-primary btn-sm" onclick="saveSalePlansFromUI()">✓ Verkaufsposten speichern</button>
       <button class="btn btn-danger btn-sm" onclick="clearSalePlans()">✕ Verkaufsposten leeren</button>
-      <span class="market-source" style="align-self:center;color:var(--muted);">Station: Amarr VIII (Oris) - Emperor Family Academy. Striche bedeuten: noch nicht aktualisiert.</span>
+      <span class="market-source" style="align-self:center;color:var(--muted);">Station: Amarr VIII (Oris) - Emperor Family Academy. Empfehlung nutzt aktuelle ESI Station-Sell-Orders.</span>
     </div>
     <div class="market-source" style="margin-bottom:10px;color:var(--muted);">
       Solo-Mengen werden direkt der jeweiligen Gruppe zugerechnet. Flottenmenge wird automatisch gleichmäßig auf die angehakten Gruppen verteilt.
@@ -733,8 +733,8 @@ textarea#excludedResourcesInput:focus { border-color: var(--cyan); box-shadow: 0
           <tr>
             <th>Material</th>
             <th>120T Trend</th>
-            <th>Station 5T VWAP</th>
-            <th>Station 20T VWAP</th>
+            <th>5T Ø Fallback</th>
+            <th>20T Ø Fallback</th>
             <th>Empfehlung</th>
             <th>Tatsächlicher Verkaufspreis</th>
             <th>Solo Alvandeus-Gruppe</th>
@@ -1550,22 +1550,19 @@ function salesPriceRecommendation(plan) {
       detail: plan.snapshotFetchedAt ? `Stand ${plan.snapshotFetchedAt}` : '',
     };
   }
-  const station20 = Number(plan.stationVwap20d) || 0;
-  const station5 = Number(plan.stationVwap5d) || 0;
   const fallback20 = Number(plan.avgSell20d) || 0;
   const fallback5 = Number(plan.avgSell5d) || 0;
   const weightedPrice = (shortPrice, longPrice) => {
     if (shortPrice > 0 && longPrice > 0) return (shortPrice * 0.7) + (longPrice * 0.3);
     return shortPrice || longPrice || 0;
   };
-  const hasStation = station5 > 0 || station20 > 0;
-  const price = hasStation ? weightedPrice(station5, station20) : weightedPrice(fallback5, fallback20);
-  const trades = Number(plan.stationTrades20d) || 0;
-  const volume = Number(plan.stationVolume20d) || 0;
-  const basis = hasStation ? 'Station 70/30' : price ? 'Region 70/30' : '';
+  const price = weightedPrice(fallback5, fallback20);
+  const volume = Number(plan.regionSellVolume) || 0;
+  const orders = Number(plan.regionSellOrderCount) || 0;
+  const basis = price ? 'Region 70/30' : '';
   let quality = 'keine Daten';
-  if (trades >= 50 || volume >= 10000000) quality = 'gut';
-  else if (trades >= 15 || volume >= 1000000) quality = 'mittel';
+  if (orders >= 8 || volume >= 10000000) quality = 'gut';
+  else if (orders >= 3 || volume >= 1000000) quality = 'mittel';
   else if (price > 0) quality = 'dünn';
   return { price, basis, quality };
 }
@@ -1587,8 +1584,8 @@ function renderSalesMaterialsTable() {
   body.innerHTML = SALES_MATERIALS.map(material => {
     const key = String(material.typeId);
     const plan = salesPlanFor(material.typeId);
-    const station5 = plan.stationVwap5d ? fUnitISKPrecise(plan.stationVwap5d) : (plan.avgSell5d ? fUnitISKPrecise(plan.avgSell5d) : '—');
-    const station20 = plan.stationVwap20d ? fUnitISKPrecise(plan.stationVwap20d) : (plan.avgSell20d ? fUnitISKPrecise(plan.avgSell20d) : '—');
+    const station5 = plan.avgSell5d ? fUnitISKPrecise(plan.avgSell5d) : '—';
+    const station20 = plan.avgSell20d ? fUnitISKPrecise(plan.avgSell20d) : '—';
     const recommendation = salesPriceRecommendation(plan);
     const recommendationText = recommendation.price ? fUnitISKPrecise(recommendation.price) : '—';
     const recommendationMeta = recommendation.basis ? `${recommendation.basis} · ${recommendation.quality}${recommendation.detail ? `<br>${recommendation.detail}` : ''}` : '';
@@ -1597,8 +1594,8 @@ function renderSalesMaterialsTable() {
       if (Array.isArray(dates) && dates.length) return dates.length > 1 ? `${dates[0]} bis ${dates[dates.length - 1]}` : dates[0];
       return fallback ? `Stand: ${fallback}` : '';
     };
-    const meta5 = plan.stationLastDate ? `bis ${plan.stationLastDate}` : rangeLabel(plan.avgSell5dDates, plan.avgSell5dAt);
-    const meta20 = plan.stationLastDate ? `bis ${plan.stationLastDate}` : rangeLabel(plan.avgSell20dDates, plan.avgSell20dAt);
+    const meta5 = rangeLabel(plan.avgSell5dDates, plan.avgSell5dAt);
+    const meta20 = rangeLabel(plan.avgSell20dDates, plan.avgSell20dAt);
     const soloInputs = SALES_GROUPS.map(group => {
       const soloValue = plan.soloAmounts?.[group.id] ?? plan.amounts?.[group.id] ?? '';
       return `<td><input class="price-input" data-sale-material="${key}" data-sale-solo-group="${group.id}" value="${fInputAmount(soloValue)}" placeholder="Solo" oninput="renderSalesPayoutCards()" onblur="formatAmountInput(this);renderSalesPayoutCards()"></td>`;
@@ -1719,9 +1716,7 @@ async function refreshSalesMaterialAverages() {
     const nextMaterials = { ...(current.materials || {}) };
     let snapshotUpdated = 0;
     let snapshotSource = 'live';
-    let stationUpdated = 0;
     let fallbackUpdated = 0;
-    let stationCacheUsed = 0;
     let fallbackCacheUsed = 0;
     const errors = [];
 
@@ -1740,55 +1735,21 @@ async function refreshSalesMaterialAverages() {
       }
     }
 
-    for (const material of SALES_MATERIALS) {
-      const key = String(material.typeId);
-      const loadStationPrice = async () => {
-        const res = await fetch(apiUrl('sales-station-history'), {
-          method: 'POST',
-          headers: apiHeaders(),
-          body: JSON.stringify({ stationId: SALES_STATION_ID, typeId: material.typeId, days: 120 }),
-        });
-        let payload = null;
-        try { payload = await res.json(); } catch(e) {}
-        if (!res.ok) throw new Error(`${material.name}: ${payload?.error || `HTTP ${res.status}`}`);
-        if (!payload.ok || !payload.data) throw new Error(`${material.name}: ${payload.error || 'Ungültige API-Antwort'}`);
-        return payload.data;
-      };
-      const loadFallbackAverage = async (days) => {
-        const res = await fetch(apiUrl('sales-material-history'), {
-          method: 'POST',
-          headers: apiHeaders(),
-          body: JSON.stringify({ regionId: 10000043, typeId: material.typeId, days }),
-        });
-        let payload = null;
-        try { payload = await res.json(); } catch(e) {}
-        if (!res.ok) throw new Error(`${material.name}: ${payload?.error || `HTTP ${res.status}`}`);
-        if (!payload.ok || !payload.data) throw new Error(`${material.name}: ${payload.error || 'Ungültige API-Antwort'}`);
-        return payload.data;
-      };
-      try {
-        const station = await loadStationPrice();
-        nextMaterials[key] = {
-          ...(nextMaterials[key] || {}),
-          stationId: SALES_STATION_ID,
-          stationName: SALES_STATION_NAME,
-          stationVwap5d: station.stationVwap5d,
-          stationVwap20d: station.stationVwap20d,
-          stationVolume5d: station.stationVolume5d,
-          stationVolume20d: station.stationVolume20d,
-          stationTrades20d: station.stationTrades20d,
-          stationTrend120d: station.stationTrend120d,
-          stationLastDate: station.lastDate,
-          stationDates: station.dates || [],
-          stationBasis: station.basis,
-          stationSource: station.source,
-          stationFetchedAt: station.fetchedAt,
-          stationCached: !!station.cached,
-          stationCacheFetchedAt: station.cacheFetchedAt || '',
+    if (!snapshotUpdated) {
+      for (const material of SALES_MATERIALS) {
+        const key = String(material.typeId);
+        const loadFallbackAverage = async (days) => {
+          const res = await fetch(apiUrl('sales-material-history'), {
+            method: 'POST',
+            headers: apiHeaders(),
+            body: JSON.stringify({ regionId: 10000043, typeId: material.typeId, days }),
+          });
+          let payload = null;
+          try { payload = await res.json(); } catch(e) {}
+          if (!res.ok) throw new Error(`${material.name}: ${payload?.error || `HTTP ${res.status}`}`);
+          if (!payload.ok || !payload.data) throw new Error(`${material.name}: ${payload.error || 'Ungültige API-Antwort'}`);
+          return payload.data;
         };
-        stationUpdated++;
-        if (station.cached) stationCacheUsed++;
-      } catch (err) {
         try {
           const avg5 = await loadFallbackAverage(5);
           const avg20 = await loadFallbackAverage(20);
@@ -1803,32 +1764,28 @@ async function refreshSalesMaterialAverages() {
             avgSell20dAt: avg20.fetchedAt,
             avgSell20dDates: avg20.dates || [],
             stationTrend120d: avg120.trend120d,
-            stationError: err.message,
             regionCached: usedCachedFallback,
             regionCacheFetchedAt: avg120.cacheFetchedAt || avg20.cacheFetchedAt || avg5.cacheFetchedAt || '',
           };
           fallbackUpdated++;
           if (usedCachedFallback) fallbackCacheUsed++;
-          errors.push(`${material.name}: Station nicht verfügbar (${err.message}), Region-Ø und Region-Trend genutzt`);
         } catch (fallbackErr) {
-          errors.push(fallbackErr.message || err.message);
+          errors.push(fallbackErr.message);
         }
       }
     }
-    const updated = snapshotUpdated + stationUpdated + fallbackUpdated;
+    const updated = snapshotUpdated + fallbackUpdated;
     if (!updated) throw new Error(errors[0] || 'keine Preiswerte gefunden');
     salePlans = { ...current, materials: nextMaterials };
     saveSalePlanData();
     renderSalesPage();
     const fallbackCacheText = fallbackCacheUsed ? `, davon ${fallbackCacheUsed} aus DB-Cache` : '';
-    const stationCacheText = stationCacheUsed ? `, davon ${stationCacheUsed} aus DB-Cache` : '';
-    const fallbackReason = errors.length ? ` Station nicht verfügbar: ${errors[0]}` : '';
+    const fallbackReason = errors.length ? ` Hinweis: ${errors[0]}` : '';
     const fallbackText = fallbackUpdated ? ` ${fallbackUpdated} Materialien mit Region-Fallback inkl. Trend${fallbackCacheText}.${fallbackReason}` : '';
-    const stationText = stationUpdated ? `${stationUpdated} Materialien mit station-genauem 5T/20T VWAP und 120T-Trend${stationCacheText}` : '0 Materialien mit Stationdaten';
     const snapshotText = snapshotUpdated ? `${snapshotUpdated} aktuelle Station-Sell-Orders aus ${snapshotSource === 'DB' ? 'DB-Snapshots' : 'ESI-Snapshots'}. ` : '';
-    showSalesMsg('ok', `✓ ${snapshotText}${stationText} aktualisiert.${fallbackText}`);
+    showSalesMsg('ok', `✓ ${snapshotText}${fallbackText || 'Empfehlungen aktualisiert.'}`);
   } catch (err) {
-    showSalesMsg('err', `Stationpreise konnten nicht geladen werden: ${err.message}`);
+    showSalesMsg('err', `Preisdaten konnten nicht geladen werden: ${err.message}`);
   }
 }
 
