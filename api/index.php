@@ -482,39 +482,57 @@ function snapshot_trend(array $rows): array {
             'direction' => 'unknown',
             'label' => 'zu wenig Snapshots',
             'percent' => null,
-            'days' => $count,
+            'samples' => $count,
             'source' => 'Eigene Snapshots',
         ];
     }
     usort($values, static fn($a, $b) => strcmp((string)$a['fetched_at'], (string)$b['fetched_at']));
-    $first = (float)$values[0]['station_best_sell'];
-    $last = (float)$values[$count - 1]['station_best_sell'];
-    if ($first <= 0 || $last <= 0) {
+    $windowSize = min(8, max(2, (int)floor($count / 3)));
+    $olderValues = array_slice($values, 0, $windowSize);
+    $recentValues = array_slice($values, -$windowSize);
+    $avg = static function (array $sample): float {
+        $sum = 0.0;
+        $n = 0;
+        foreach ($sample as $row) {
+            $price = numeric_price($row['station_best_sell'] ?? null);
+            if ($price !== null) {
+                $sum += $price;
+                $n++;
+            }
+        }
+        return $n > 0 ? $sum / $n : 0.0;
+    };
+    $olderPrice = $avg($olderValues);
+    $recentPrice = $avg($recentValues);
+    if ($olderPrice <= 0 || $recentPrice <= 0) {
         return [
             'direction' => 'unknown',
             'label' => 'zu wenig Snapshots',
             'percent' => null,
-            'days' => $count,
+            'samples' => $count,
             'source' => 'Eigene Snapshots',
         ];
     }
-    $percent = (($last - $first) / $first) * 100;
+    $percent = (($recentPrice - $olderPrice) / $olderPrice) * 100;
     $abs = abs($percent);
-    if ($abs < 1.0) {
+    if ($abs < 0.8) {
         $direction = 'flat';
         $label = 'seitwärts';
     } elseif ($percent > 0) {
-        $direction = $abs >= 6 ? 'up' : 'up';
-        $label = $abs >= 6 ? 'stark steigend' : 'steigend';
+        $direction = 'up';
+        $label = $abs >= 4 ? 'stark steigend' : 'steigend';
     } else {
         $direction = 'down';
-        $label = $abs >= 6 ? 'stark fallend' : 'fallend';
+        $label = $abs >= 4 ? 'stark fallend' : 'fallend';
     }
     return [
         'direction' => $direction,
         'label' => $label,
         'percent' => $percent,
-        'days' => $count,
+        'samples' => $count,
+        'compareSamples' => $windowSize,
+        'recentPrice' => $recentPrice,
+        'olderPrice' => $olderPrice,
         'fromDate' => $values[0]['fetched_at'] ?? null,
         'toDate' => $values[$count - 1]['fetched_at'] ?? null,
         'source' => 'Eigene Snapshots',
