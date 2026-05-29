@@ -957,12 +957,21 @@ function fVol(v) {
   if (v >= 1e3) return (v/1e3).toFixed(1)+'K m³';
   return v.toFixed(1)+' m³';
 }
+function normalizePilotKey(value) {
+  return String(value ?? '').trim().toLowerCase();
+}
 const PILOT_ALIASES = {
   Leevi: 'Leevia',
 };
+const PILOT_ALIAS_BY_KEY = Object.fromEntries(
+  Object.entries(PILOT_ALIASES).map(([from, to]) => [normalizePilotKey(from), to])
+);
+function getCanonicalPilotName(pilot) {
+  const clean = String(pilot ?? 'Unbekannt').trim() || 'Unbekannt';
+  return PILOT_ALIAS_BY_KEY[normalizePilotKey(clean)] || clean;
+}
 function getPilot(e) {
-  const pilot = (e?.pilot || 'Unbekannt').trim() || 'Unbekannt';
-  return PILOT_ALIASES[pilot] || pilot;
+  return getCanonicalPilotName(e?.pilot);
 }
 const PLAYER_GROUPS_BY_PILOT = {
   Alvandeus: 'Alvandeus / Alvandea / Alavanda',
@@ -975,8 +984,12 @@ const PLAYER_GROUPS_BY_PILOT = {
   Seryna: 'Leevia / Seryna / Paza',
   Paza: 'Leevia / Seryna / Paza',
 };
+const PLAYER_GROUPS_BY_PILOT_KEY = Object.fromEntries(
+  Object.entries(PLAYER_GROUPS_BY_PILOT).map(([pilot, group]) => [normalizePilotKey(getCanonicalPilotName(pilot)), group])
+);
 function getPlayerGroupName(pilot) {
-  return PLAYER_GROUPS_BY_PILOT[pilot] || pilot || 'Unbekannt';
+  const canonical = getCanonicalPilotName(pilot);
+  return PLAYER_GROUPS_BY_PILOT_KEY[normalizePilotKey(canonical)] || canonical || 'Unbekannt';
 }
 function getPlayerGroup(e) {
   return getPlayerGroupName(getPilot(e));
@@ -1863,6 +1876,35 @@ function parseLedger(text, pilot = 'Unbekannt') {
 }
 
 // ─────────────── IMPORT ───────────────
+function miningBucketKey(e) {
+  return [
+    normalizePilotKey(getPilot(e)),
+    String(e?.date || '').trim(),
+    String(e?.oreId || '').trim() || normalizeResourceRule(e?.ore),
+    String(e?.sysId || '').trim() || normalizeResourceRule(e?.system),
+  ].join('|');
+}
+
+function miningBucketKeys(e) {
+  const pilotKey = normalizePilotKey(getPilot(e));
+  const dateKey = String(e?.date || '').trim();
+  const oreKeys = [...new Set([String(e?.oreId || '').trim(), normalizeResourceRule(e?.ore)].filter(Boolean))];
+  const systemKeys = [...new Set([String(e?.sysId || '').trim(), normalizeResourceRule(e?.system)].filter(Boolean))];
+  const ores = oreKeys.length ? oreKeys : [''];
+  const systems = systemKeys.length ? systemKeys : [''];
+  return ores.flatMap(oreKey => systems.map(systemKey => [pilotKey, dateKey, oreKey, systemKey].join('|')));
+}
+
+function importEntryKey(e) {
+  return [
+    normalizePilotKey(getPilot(e)),
+    String(e?.date || '').trim(),
+    normalizeResourceRule(e?.ore),
+    normalizeResourceRule(e?.system),
+    String(Number(e?.amount) || 0),
+  ].join('|');
+}
+
 function doImport() {
   const text = document.getElementById('importArea').value;
   const pilot = document.getElementById('importPilot').value.trim() || 'Unbekannt';
@@ -1878,9 +1920,9 @@ function doImport() {
     return;
   }
 
-  // Deduplicate by id prefix (date+ore+system+amount)
-  const existingKeys = new Set(entries.map(e => `${getPilot(e)}_${e.date}_${e.ore}_${e.system}_${e.amount}`));
-  const newOnes = parsed.filter(e => !existingKeys.has(`${getPilot(e)}_${e.date}_${e.ore}_${e.system}_${e.amount}`));
+  // Deduplicate by pilot+date+ore+system+amount.
+  const existingKeys = new Set(entries.map(importEntryKey));
+  const newOnes = parsed.filter(e => !existingKeys.has(importEntryKey(e)));
 
   entries.push(...newOnes);
 
@@ -1898,12 +1940,10 @@ function mergeEsiMiningEntries(nextEntries) {
   readExcludedResourcesFromUI();
   persistExcludedResources();
   const filtered = nextEntries.filter(e => !isExcludedResourceEntry(e));
-  const incomingKeys = new Set(filtered.map(e => e.esiKey).filter(Boolean));
-  const kept = entries.filter(e => !e.esiKey || !incomingKeys.has(e.esiKey));
   const normalized = filtered.map(e => ({
-    id: `esi_${e.esiKey}`,
+    id: `esi_${e.esiKey || miningBucketKey(e)}`,
     date: e.date,
-    pilot: e.pilot || 'Unbekannt',
+    pilot: getCanonicalPilotName(e.pilot),
     ore: e.ore || `Type ${e.oreId || ''}`,
     amount: Number(e.amount) || 0,
     resAmount: Number(e.resAmount) || 0,
@@ -1917,10 +1957,25 @@ function mergeEsiMiningEntries(nextEntries) {
     source: 'esi-mining-ledger',
     esiKey: e.esiKey,
   })).filter(e => e.amount > 0);
+  const incomingKeys = new Set(normalized.map(e => e.esiKey).filter(Boolean));
+  const incomingBuckets = new Set(normalized.flatMap(miningBucketKeys));
+  let replacedEsi = 0;
+  let replacedManual = 0;
+  const kept = entries.filter(e => {
+    if (e.esiKey && incomingKeys.has(e.esiKey)) {
+      replacedEsi++;
+      return false;
+    }
+    if (!e.esiKey && miningBucketKeys(e).some(key => incomingBuckets.has(key))) {
+      replacedManual++;
+      return false;
+    }
+    return true;
+  });
   entries = [...kept, ...normalized];
   saveData();
   updateAll();
-  return { imported: normalized.length, replaced: incomingKeys.size, excluded: nextEntries.length - filtered.length };
+  return { imported: normalized.length, replacedEsi, replacedManual, excluded: nextEntries.length - filtered.length };
 }
 
 function showMsg(type, text) {
@@ -2029,7 +2084,12 @@ async function importEveMiningLedger() {
     if (!res.ok) throw new Error(payload?.error || `HTTP ${res.status}`);
     if (!payload?.ok || !payload.data) throw new Error(payload?.error || 'Ungültige API-Antwort');
     const result = mergeEsiMiningEntries(payload.data.entries || []);
-    statusEl.textContent = `✓ ${result.imported} ESI-Ledgerzeilen für ${payload.data.characterName} übernommen${result.excluded ? `, ${result.excluded} ausgeschlossen` : ''}.`;
+    const replaced = [
+      result.replacedManual ? `${result.replacedManual} manuelle Zeilen ersetzt` : '',
+      result.replacedEsi ? `${result.replacedEsi} ESI-Zeilen aktualisiert` : '',
+      result.excluded ? `${result.excluded} ausgeschlossen` : '',
+    ].filter(Boolean).join(', ');
+    statusEl.textContent = `✓ ${result.imported} ESI-Ledgerzeilen für ${payload.data.characterName} übernommen${replaced ? ` (${replaced})` : ''}.`;
   } catch (err) {
     statusEl.textContent = `Mining-Tagebuch konnte nicht geladen werden: ${err.message}`;
   }
