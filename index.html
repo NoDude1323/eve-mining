@@ -512,6 +512,16 @@ textarea#excludedResourcesInput:focus { border-color: var(--cyan); box-shadow: 0
   <div class="stats-grid" id="statsGrid"></div>
 
   <div class="card chart-card">
+    <div class="card-header">EVE-Verknüpfung</div>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+      <button class="btn btn-primary btn-sm" onclick="connectEveSso()">Mit EVE Online verbinden</button>
+      <button class="btn btn-primary btn-sm" onclick="loadEveSsoStatus()">Status aktualisieren</button>
+      <span class="market-source" id="eveSsoStatus">Noch nicht geprüft.</span>
+    </div>
+    <div class="market-source" id="eveSsoCharacters" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="card chart-card">
     <div class="card-header">Übersicht nach Spielergruppe</div>
     <div class="table-wrap">
       <table>
@@ -1917,6 +1927,48 @@ function apiHeaders() {
   return headers;
 }
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[ch]));
+}
+
+function connectEveSso() {
+  if (!API_BASE_URL) return;
+  window.location.href = apiUrl('sso-start');
+}
+
+async function loadEveSsoStatus() {
+  const statusEl = document.getElementById('eveSsoStatus');
+  const charsEl = document.getElementById('eveSsoCharacters');
+  if (!statusEl || !charsEl || !API_BASE_URL) return;
+  statusEl.textContent = 'EVE SSO wird geprüft...';
+  try {
+    const res = await fetch(apiUrl('sso-status'), { headers: apiHeaders() });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const payload = await res.json();
+    if (!payload.ok) throw new Error(payload.error || 'Ungültige API-Antwort');
+    if (!payload.configured) {
+      statusEl.textContent = 'EVE SSO ist in api/config.php noch nicht konfiguriert.';
+      charsEl.innerHTML = '';
+      return;
+    }
+    const chars = payload.characters || [];
+    statusEl.textContent = chars.length ? `${chars.length} Charakter(e) verbunden.` : 'EVE SSO ist bereit, aber noch kein Charakter verbunden.';
+    charsEl.innerHTML = chars.length ? chars.map(char => {
+      const scopes = (char.scopes || []).join(', ') || 'keine Scopes';
+      return `<div><strong style="color:var(--cyan);">${escapeHtml(char.characterName)}</strong> <span style="color:var(--muted);">#${char.characterId} · ${escapeHtml(scopes)}</span></div>`;
+    }).join('') : '';
+  } catch (err) {
+    statusEl.textContent = `EVE SSO konnte nicht geprüft werden: ${err.message}`;
+    charsEl.innerHTML = '';
+  }
+}
+
 async function loadRemoteData() {
   if (!API_BASE_URL) return false;
   try {
@@ -2708,6 +2760,7 @@ async function initApp() {
     saveData();
   }
   updateAll();
+  loadEveSsoStatus();
 }
 initApp();
 </script>

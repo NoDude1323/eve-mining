@@ -16,6 +16,13 @@ function respond(int $status, array $payload): void {
     exit;
 }
 
+function respond_html(int $status, string $html): void {
+    http_response_code($status);
+    header('Content-Type: text/html; charset=utf-8');
+    echo $html;
+    exit;
+}
+
 function request_header(string $name): string {
     $key = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
     return $_SERVER[$key] ?? '';
@@ -60,6 +67,20 @@ function read_config(): array {
     }
     $config = require $path;
     return is_array($config) ? $config : [];
+}
+
+function sso_config(array $config): array {
+    $sso = $config['sso'] ?? [];
+    return is_array($sso) ? $sso : [];
+}
+
+function sso_scopes(array $config): array {
+    $scopes = sso_config($config)['scopes'] ?? ['esi-industry.read_character_mining.v1'];
+    if (is_string($scopes)) {
+        $scopes = preg_split('/\s+/', trim($scopes)) ?: [];
+    }
+    $scopes = array_values(array_filter(array_map('trim', is_array($scopes) ? $scopes : [])));
+    return array_values(array_unique($scopes));
 }
 
 function pdo_or_null(array $config): ?PDO {
@@ -117,6 +138,24 @@ function pdo_or_null(array $config): ?PDO {
           fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
           KEY idx_snapshot_lookup (region_id, station_id, type_id, fetched_at),
           KEY idx_snapshot_fetched_at (fetched_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+    );
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS eve_sso_states (
+          state_key VARCHAR(128) NOT NULL PRIMARY KEY,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+    );
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS eve_sso_characters (
+          character_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+          character_name VARCHAR(128) NOT NULL,
+          owner_hash VARCHAR(191) NULL,
+          scopes_json TEXT NOT NULL,
+          access_token TEXT NOT NULL,
+          refresh_token TEXT NULL,
+          token_expires_at DATETIME NULL,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
     );
     return $pdo;
@@ -273,6 +312,133 @@ function fetch_json(string $url): array {
         throw new RuntimeException('Invalid JSON response');
     }
     return $decoded;
+}
+
+function post_form_json(string $url, array $fields, ?string $basicUser = null, ?string $basicPass = null): array {
+    if (!extension_loaded('curl')) {
+        respond(500, ['ok' => false, 'error' => 'PHP curl extension is not enabled']);
+    }
+    $headers = ['Content-Type: application/x-www-form-urlencoded', 'Accept: application/json'];
+    if ($basicUser !== null && $basicPass !== null) {
+        $headers[] = 'Authorization: Basic ' . base64_encode($basicUser . ':' . $basicPass);
+    }
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_CONNECTTIMEOUT => 8,
+        CURLOPT_TIMEOUT => 20,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => http_build_query($fields),
+        CURLOPT_USERAGENT => 'Orelytics/1.0',
+        CURLOPT_HTTPHEADER => $headers,
+    ]);
+    $raw = curl_exec($ch);
+    $err = curl_error($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($raw === false || $status < 200 || $status >= 300) {
+        throw new RuntimeException($err !== '' ? $err : 'HTTP ' . $status . ': ' . (string)$raw);
+    }
+    $decoded = json_decode((string)$raw, true);
+    if (!is_array($decoded)) {
+        throw new RuntimeException('Invalid JSON response');
+    }
+    return $decoded;
+}
+
+function base64url_decode_str(string $value): string {
+    $value = strtr($value, '-_', '+/');
+    $padding = strlen($value) % 4;
+    if ($padding) {
+        $value .= str_repeat('=', 4 - $padding);
+    }
+    $decoded = base64_decode($value, true);
+    if ($decoded === false) {
+        throw new RuntimeException('Invalid JWT payload encoding');
+    }
+    return $decoded;
+}
+
+function decode_jwt_payload(string $jwt): array {
+    $parts = explode('.', $jwt);
+    if (count($parts) < 2) {
+        throw new RuntimeException('Invalid JWT');
+    }
+    $payload = json_decode(base64url_decode_str($parts[1]), true);
+    if (!is_array($payload)) {
+        throw new RuntimeException('Invalid JWT payload');
+    }
+    return $payload;
+}
+
+function save_sso_state(PDO $pdo, string $state): void {
+    $pdo->exec("DELETE FROM eve_sso_states WHERE created_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 MINUTE)");
+    $stmt = $pdo->prepare('INSERT INTO eve_sso_states (state_key) VALUES (:state_key)');
+    $stmt->execute([':state_key' => $state]);
+}
+
+function consume_sso_state(PDO $pdo, string $state): bool {
+    $pdo->exec("DELETE FROM eve_sso_states WHERE created_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 MINUTE)");
+    $stmt = $pdo->prepare('DELETE FROM eve_sso_states WHERE state_key = :state_key');
+    $stmt->execute([':state_key' => $state]);
+    return $stmt->rowCount() > 0;
+}
+
+function save_sso_character(PDO $pdo, array $token, array $claims): array {
+    $sub = (string)($claims['sub'] ?? '');
+    if (!preg_match('/^CHARACTER:EVE:(\d+)$/', $sub, $match)) {
+        throw new RuntimeException('JWT did not contain an EVE character subject');
+    }
+    $characterId = (int)$match[1];
+    $characterName = (string)($claims['name'] ?? ('Character ' . $characterId));
+    $scopes = $claims['scp'] ?? [];
+    if (is_string($scopes)) {
+        $scopes = preg_split('/\s+/', trim($scopes)) ?: [];
+    }
+    $expiresAt = isset($claims['exp']) ? gmdate('Y-m-d H:i:s', (int)$claims['exp']) : null;
+    $stmt = $pdo->prepare(
+        'INSERT INTO eve_sso_characters (
+          character_id, character_name, owner_hash, scopes_json, access_token, refresh_token, token_expires_at
+        ) VALUES (
+          :character_id, :character_name, :owner_hash, :scopes_json, :access_token, :refresh_token, :token_expires_at
+        ) ON DUPLICATE KEY UPDATE
+          character_name = VALUES(character_name),
+          owner_hash = VALUES(owner_hash),
+          scopes_json = VALUES(scopes_json),
+          access_token = VALUES(access_token),
+          refresh_token = COALESCE(VALUES(refresh_token), refresh_token),
+          token_expires_at = VALUES(token_expires_at)'
+    );
+    $stmt->execute([
+        ':character_id' => $characterId,
+        ':character_name' => $characterName,
+        ':owner_hash' => $claims['owner'] ?? null,
+        ':scopes_json' => json_encode(array_values($scopes), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ':access_token' => $token['access_token'],
+        ':refresh_token' => $token['refresh_token'] ?? null,
+        ':token_expires_at' => $expiresAt,
+    ]);
+    return [
+        'characterId' => $characterId,
+        'characterName' => $characterName,
+        'scopes' => array_values($scopes),
+        'expiresAt' => $expiresAt,
+    ];
+}
+
+function load_sso_characters(PDO $pdo): array {
+    $rows = $pdo->query('SELECT character_id, character_name, scopes_json, token_expires_at, updated_at FROM eve_sso_characters ORDER BY character_name')->fetchAll();
+    return array_map(static function (array $row): array {
+        $scopes = json_decode((string)$row['scopes_json'], true);
+        return [
+            'characterId' => (int)$row['character_id'],
+            'characterName' => (string)$row['character_name'],
+            'scopes' => is_array($scopes) ? $scopes : [],
+            'expiresAt' => $row['token_expires_at'],
+            'updatedAt' => $row['updated_at'],
+        ];
+    }, $rows);
 }
 
 function fetch_json_with_headers(string $url): array {
@@ -876,7 +1042,8 @@ $providedToken = request_header('X-Api-Token');
 $cronToken = (string)($config['cron_token'] ?? '');
 $providedCronToken = (string)($_GET['token'] ?? request_header('X-Cron-Token'));
 $cronAuthorized = $action === 'refresh-price-snapshots' && $cronToken !== '' && hash_equals($cronToken, $providedCronToken);
-if ($expectedToken !== '' && !hash_equals($expectedToken, $providedToken) && !$cronAuthorized) {
+$ssoPublicActions = ['sso-start', 'sso-callback'];
+if ($expectedToken !== '' && !hash_equals($expectedToken, $providedToken) && !$cronAuthorized && !in_array($action, $ssoPublicActions, true)) {
     respond(401, ['ok' => false, 'error' => 'Unauthorized']);
 }
 
@@ -900,6 +1067,84 @@ if ($action === 'health') {
         'curl' => extension_loaded('curl'),
         'dbError' => $dbError,
     ]);
+}
+
+if ($action === 'sso-status') {
+    $sso = sso_config($config);
+    respond(200, [
+        'ok' => true,
+        'configured' => !empty($sso['client_id']) && !empty($sso['client_secret']) && !empty($sso['callback_url']),
+        'scopes' => sso_scopes($config),
+        'characters' => $pdo instanceof PDO ? load_sso_characters($pdo) : [],
+        'storage' => $storage,
+    ]);
+}
+
+if ($action === 'sso-start') {
+    if (!$pdo instanceof PDO) {
+        respond_html(500, '<h1>Orelytics SSO</h1><p>MySQL storage is required for EVE SSO.</p>');
+    }
+    $sso = sso_config($config);
+    $clientId = trim((string)($sso['client_id'] ?? ''));
+    $callbackUrl = trim((string)($sso['callback_url'] ?? ''));
+    if ($clientId === '' || $callbackUrl === '') {
+        respond_html(500, '<h1>Orelytics SSO</h1><p>EVE SSO is not configured.</p>');
+    }
+    $state = bin2hex(random_bytes(24));
+    save_sso_state($pdo, $state);
+    $params = [
+        'response_type' => 'code',
+        'client_id' => $clientId,
+        'redirect_uri' => $callbackUrl,
+        'scope' => implode(' ', sso_scopes($config)),
+        'state' => $state,
+    ];
+    header('Location: https://login.eveonline.com/v2/oauth/authorize?' . http_build_query($params));
+    exit;
+}
+
+if ($action === 'sso-callback') {
+    if (!$pdo instanceof PDO) {
+        respond_html(500, '<h1>Orelytics SSO</h1><p>MySQL storage is required for EVE SSO.</p>');
+    }
+    $sso = sso_config($config);
+    $clientId = trim((string)($sso['client_id'] ?? ''));
+    $clientSecret = trim((string)($sso['client_secret'] ?? ''));
+    $frontendUrl = trim((string)($sso['frontend_url'] ?? '../'));
+    $state = (string)($_GET['state'] ?? '');
+    $code = (string)($_GET['code'] ?? '');
+    if ($clientId === '' || $clientSecret === '') {
+        respond_html(500, '<h1>Orelytics SSO</h1><p>EVE SSO is not configured.</p>');
+    }
+    if ($state === '' || !consume_sso_state($pdo, $state)) {
+        respond_html(400, '<h1>Orelytics SSO</h1><p>Invalid or expired SSO state.</p>');
+    }
+    if ($code === '') {
+        respond_html(400, '<h1>Orelytics SSO</h1><p>Missing authorization code.</p>');
+    }
+    try {
+        $token = post_form_json(
+            'https://login.eveonline.com/v2/oauth/token',
+            ['grant_type' => 'authorization_code', 'code' => $code],
+            $clientId,
+            $clientSecret
+        );
+        $claims = decode_jwt_payload((string)($token['access_token'] ?? ''));
+        $aud = $claims['aud'] ?? [];
+        $audiences = is_array($aud) ? $aud : [$aud];
+        if (!in_array($clientId, $audiences, true) || !in_array('EVE Online', $audiences, true)) {
+            throw new RuntimeException('Unexpected token audience');
+        }
+        if (isset($claims['exp']) && (int)$claims['exp'] < time()) {
+            throw new RuntimeException('Token is already expired');
+        }
+        $character = save_sso_character($pdo, $token, $claims);
+        $name = htmlspecialchars($character['characterName'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $target = htmlspecialchars($frontendUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        respond_html(200, '<!doctype html><meta charset="utf-8"><title>Orelytics SSO</title><meta http-equiv="refresh" content="2;url=' . $target . '"><body style="font-family:system-ui;background:#0b1016;color:#e7edf4;padding:32px"><h1>EVE verbunden</h1><p>' . $name . ' wurde mit Orelytics verbunden.</p><p><a style="color:#8bd3ff" href="' . $target . '">Zurück zu Orelytics</a></p></body>');
+    } catch (Throwable $e) {
+        respond_html(500, '<h1>Orelytics SSO</h1><p>SSO callback failed: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p>');
+    }
 }
 
 if ($action === 'refresh-price-snapshots') {

@@ -23,6 +23,16 @@ Der Token wird in `api/config.php` als `cron_token` gesetzt. Standardmaessig wer
 
 Die Verkaufsposten-Empfehlung nutzt gespeicherte Snapshots bevorzugt als aktuellen Station-Best-Sell minus `0,01 ISK`. 5T/20T-Werte bleiben Fallback und Trendhilfe.
 
+## EVE SSO
+
+Orelytics kann EVE-Charaktere per EVE Online SSO verknuepfen. Die Zugangsdaten der EVE Developer App gehoeren nur in `api/config.php`.
+
+Start-Scope:
+
+```text
+esi-industry.read_character_mining.v1
+```
+
 ## Private Dateien
 
 Diese Dateien gehören nicht ins Repository:

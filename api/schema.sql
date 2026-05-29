@@ -34,3 +34,19 @@ CREATE TABLE IF NOT EXISTS eve_market_order_snapshots (
   KEY idx_snapshot_lookup (region_id, station_id, type_id, fetched_at),
   KEY idx_snapshot_fetched_at (fetched_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS eve_sso_states (
+  state_key VARCHAR(128) NOT NULL PRIMARY KEY,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS eve_sso_characters (
+  character_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+  character_name VARCHAR(128) NOT NULL,
+  owner_hash VARCHAR(191) NULL,
+  scopes_json TEXT NOT NULL,
+  access_token TEXT NOT NULL,
+  refresh_token TEXT NULL,
+  token_expires_at DATETIME NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

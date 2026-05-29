@@ -29,6 +29,8 @@ Die Anwendung nutzt diese Tabellen:
 eve_mining_state
 eve_market_cache
 eve_market_order_snapshots
+eve_sso_states
+eve_sso_characters
 ```
 
 Die Tabellen werden von `api/index.php` automatisch angelegt, wenn `pdo_mysql` funktioniert.
@@ -41,6 +43,7 @@ Auf dem Webspace:
 2. Bestehende Datenbankdaten eintragen.
 3. Optional `api_token` setzen.
 4. Optional `cron_token` setzen, wenn geplante Preis-Snapshots per URL ausgelöst werden sollen.
+5. Optional EVE SSO unter `sso` konfigurieren.
 
 Beispiel:
 
@@ -49,6 +52,15 @@ Beispiel:
 return [
     'api_token' => '',
     'cron_token' => '',
+    'sso' => [
+        'client_id' => '',
+        'client_secret' => '',
+        'callback_url' => 'https://orelytics.soluratec.de/api/index.php?action=sso-callback',
+        'frontend_url' => 'https://orelytics.soluratec.de/',
+        'scopes' => [
+            'esi-industry.read_character_mining.v1',
+        ],
+    ],
     'db' => [
         'host' => 'localhost',
         'port' => 3306,
@@ -59,6 +71,24 @@ return [
     ],
 ];
 ```
+
+## EVE SSO
+
+Callback URL im EVE Developer Portal:
+
+```text
+https://orelytics.soluratec.de/api/index.php?action=sso-callback
+```
+
+Client ID und Client Secret werden nur in `api/config.php` eingetragen. `api/config.php` wird nicht committed.
+
+Empfohlene Start-Scopes:
+
+```text
+esi-industry.read_character_mining.v1
+```
+
+Wallet, Orders und Assets sollten erst spaeter ergaenzt werden, wenn der Login stabil funktioniert.
 
 ## Geplante Marktpreis-Snapshots
 
