@@ -84,11 +84,28 @@ function sso_scopes(array $config): array {
     return array_values(array_unique($scopes));
 }
 
+function db_config(array $config): ?array {
+    if (!empty($config['db']) && is_array($config['db'])) {
+        return $config['db'];
+    }
+    if (!empty($config['db_host']) && !empty($config['db_name']) && !empty($config['db_user'])) {
+        return [
+            'host' => $config['db_host'],
+            'port' => (int)($config['db_port'] ?? 3306),
+            'name' => $config['db_name'],
+            'user' => $config['db_user'],
+            'pass' => $config['db_pass'] ?? '',
+            'charset' => $config['db_charset'] ?? 'utf8mb4',
+        ];
+    }
+    return null;
+}
+
 function pdo_or_null(array $config): ?PDO {
-    if (!extension_loaded('pdo_mysql') || empty($config['db']) || !is_array($config['db'])) {
+    $db = db_config($config);
+    if (!extension_loaded('pdo_mysql') || $db === null) {
         return null;
     }
-    $db = $config['db'];
     $dsn = sprintf(
         'mysql:host=%s;port=%d;dbname=%s;charset=%s',
         $db['host'] ?? 'localhost',
@@ -1063,7 +1080,7 @@ if ($action === 'health') {
         'ok' => true,
         'php' => PHP_VERSION,
         'storage' => $storage,
-        'mysqlConfigured' => !empty($config['db']),
+        'mysqlConfigured' => db_config($config) !== null,
         'pdo_mysql' => extension_loaded('pdo_mysql'),
         'curl' => extension_loaded('curl'),
         'dbError' => $dbError,
