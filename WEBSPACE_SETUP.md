@@ -90,6 +90,8 @@ esi-industry.read_character_mining.v1
 
 Wallet, Orders und Assets sollten erst spaeter ergaenzt werden, wenn der Login stabil funktioniert.
 
+Mit `esi-industry.read_character_mining.v1` kann die Anwendung das persoenliche Mining-Tagebuch verbundener Charaktere abrufen.
+
 ## Geplante Marktpreis-Snapshots
 
 Der Endpunkt sammelt aktuelle ESI Market Orders fuer Domain/Amarr und speichert je Material einen Snapshot in `eve_market_order_snapshots`.

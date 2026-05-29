@@ -365,6 +365,74 @@ function post_form_json(string $url, array $fields, ?string $basicUser = null, ?
     return $decoded;
 }
 
+function fetch_auth_json_with_headers(string $url, string $accessToken): array {
+    if (!extension_loaded('curl')) {
+        respond(500, ['ok' => false, 'error' => 'PHP curl extension is not enabled']);
+    }
+    $headers = [];
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_CONNECTTIMEOUT => 8,
+        CURLOPT_TIMEOUT => 20,
+        CURLOPT_USERAGENT => 'Orelytics/1.0',
+        CURLOPT_HTTPHEADER => [
+            'Accept: application/json',
+            'Authorization: Bearer ' . $accessToken,
+        ],
+        CURLOPT_HEADERFUNCTION => static function ($ch, string $header) use (&$headers): int {
+            $len = strlen($header);
+            $parts = explode(':', $header, 2);
+            if (count($parts) === 2) {
+                $headers[strtolower(trim($parts[0]))] = trim($parts[1]);
+            }
+            return $len;
+        },
+    ]);
+    $raw = curl_exec($ch);
+    $err = curl_error($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($raw === false || $status < 200 || $status >= 300) {
+        throw new RuntimeException($err !== '' ? $err : 'HTTP ' . $status . ': ' . (string)$raw);
+    }
+    $decoded = json_decode((string)$raw, true);
+    if (!is_array($decoded)) {
+        throw new RuntimeException('Invalid JSON response');
+    }
+    return ['data' => $decoded, 'headers' => $headers, 'status' => $status];
+}
+
+function post_json(string $url, array $payload): array {
+    if (!extension_loaded('curl')) {
+        respond(500, ['ok' => false, 'error' => 'PHP curl extension is not enabled']);
+    }
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_CONNECTTIMEOUT => 8,
+        CURLOPT_TIMEOUT => 20,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        CURLOPT_USERAGENT => 'Orelytics/1.0',
+        CURLOPT_HTTPHEADER => ['Accept: application/json', 'Content-Type: application/json'],
+    ]);
+    $raw = curl_exec($ch);
+    $err = curl_error($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($raw === false || $status < 200 || $status >= 300) {
+        throw new RuntimeException($err !== '' ? $err : 'HTTP ' . $status . ': ' . (string)$raw);
+    }
+    $decoded = json_decode((string)$raw, true);
+    if (!is_array($decoded)) {
+        throw new RuntimeException('Invalid JSON response');
+    }
+    return $decoded;
+}
+
 function base64url_decode_str(string $value): string {
     $value = strtr($value, '-_', '+/');
     $padding = strlen($value) % 4;
@@ -457,6 +525,141 @@ function load_sso_characters(PDO $pdo): array {
             'updatedAt' => $row['updated_at'],
         ];
     }, $rows);
+}
+
+function load_sso_character_token(PDO $pdo, int $characterId): ?array {
+    $stmt = $pdo->prepare('SELECT * FROM eve_sso_characters WHERE character_id = :character_id LIMIT 1');
+    $stmt->execute([':character_id' => $characterId]);
+    $row = $stmt->fetch();
+    return is_array($row) ? $row : null;
+}
+
+function update_sso_token(PDO $pdo, int $characterId, array $token, ?array $claims = null): void {
+    $expiresAt = $claims && isset($claims['exp']) ? gmdate('Y-m-d H:i:s', (int)$claims['exp']) : gmdate('Y-m-d H:i:s', time() + (int)($token['expires_in'] ?? 1200));
+    $stmt = $pdo->prepare(
+        'UPDATE eve_sso_characters
+         SET access_token = :access_token,
+             refresh_token = COALESCE(:refresh_token, refresh_token),
+             token_expires_at = :token_expires_at
+         WHERE character_id = :character_id'
+    );
+    $stmt->execute([
+        ':access_token' => $token['access_token'],
+        ':refresh_token' => $token['refresh_token'] ?? null,
+        ':token_expires_at' => $expiresAt,
+        ':character_id' => $characterId,
+    ]);
+}
+
+function get_valid_access_token(PDO $pdo, array $config, int $characterId): string {
+    $row = load_sso_character_token($pdo, $characterId);
+    if (!$row) {
+        throw new RuntimeException('Character is not connected');
+    }
+    $expiresAt = strtotime((string)($row['token_expires_at'] ?? '')) ?: 0;
+    if ($expiresAt > time() + 90 && !empty($row['access_token'])) {
+        return (string)$row['access_token'];
+    }
+    if (empty($row['refresh_token'])) {
+        throw new RuntimeException('Missing refresh token. Please reconnect this character.');
+    }
+    $sso = sso_config($config);
+    $clientId = trim((string)($sso['client_id'] ?? ''));
+    $clientSecret = trim((string)($sso['client_secret'] ?? ''));
+    if ($clientId === '' || $clientSecret === '') {
+        throw new RuntimeException('EVE SSO is not configured');
+    }
+    $token = post_form_json(
+        'https://login.eveonline.com/v2/oauth/token',
+        ['grant_type' => 'refresh_token', 'refresh_token' => (string)$row['refresh_token']],
+        $clientId,
+        $clientSecret
+    );
+    $claims = decode_jwt_payload((string)($token['access_token'] ?? ''));
+    update_sso_token($pdo, $characterId, $token, $claims);
+    return (string)$token['access_token'];
+}
+
+function esi_names(array $ids): array {
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn($id) => $id > 0)));
+    if (!$ids) {
+        return [];
+    }
+    $map = [];
+    foreach (array_chunk($ids, 1000) as $chunk) {
+        $rows = post_json('https://esi.evetech.net/latest/universe/names/?datasource=tranquility', $chunk);
+        foreach ($rows as $row) {
+            if (isset($row['id'], $row['name'])) {
+                $map[(string)$row['id']] = (string)$row['name'];
+            }
+        }
+    }
+    return $map;
+}
+
+function fetch_character_mining_ledger(PDO $pdo, array $config, int $characterId): array {
+    $row = load_sso_character_token($pdo, $characterId);
+    if (!$row) {
+        throw new RuntimeException('Character is not connected');
+    }
+    $scopes = json_decode((string)($row['scopes_json'] ?? '[]'), true);
+    if (!is_array($scopes) || !in_array('esi-industry.read_character_mining.v1', $scopes, true)) {
+        throw new RuntimeException('Character did not authorize esi-industry.read_character_mining.v1');
+    }
+    $accessToken = get_valid_access_token($pdo, $config, $characterId);
+    $ledger = [];
+    $page = 1;
+    $pages = 1;
+    do {
+        $url = sprintf('https://esi.evetech.net/latest/characters/%d/mining/?datasource=tranquility&page=%d', $characterId, $page);
+        $response = fetch_auth_json_with_headers($url, $accessToken);
+        $ledger = array_merge($ledger, $response['data']);
+        $pagesHeader = $response['headers']['x-pages'] ?? null;
+        $pages = $pagesHeader !== null ? max(1, min(20, (int)$pagesHeader)) : 1;
+        $page++;
+    } while ($page <= $pages);
+
+    $ids = [];
+    foreach ($ledger as $rowData) {
+        $ids[] = (int)($rowData['type_id'] ?? 0);
+        $ids[] = (int)($rowData['solar_system_id'] ?? 0);
+    }
+    $names = esi_names($ids);
+    $entries = [];
+    foreach ($ledger as $rowData) {
+        $date = (string)($rowData['date'] ?? '');
+        $typeId = (int)($rowData['type_id'] ?? 0);
+        $systemId = (int)($rowData['solar_system_id'] ?? 0);
+        $quantity = (int)($rowData['quantity'] ?? 0);
+        if ($date === '' || $typeId <= 0 || $systemId <= 0 || $quantity <= 0) {
+            continue;
+        }
+        $key = $characterId . '_' . $date . '_' . $typeId . '_' . $systemId;
+        $entries[] = [
+            'esiKey' => $key,
+            'date' => $date,
+            'pilot' => (string)$row['character_name'],
+            'ore' => $names[(string)$typeId] ?? ('Type ' . $typeId),
+            'amount' => $quantity,
+            'resAmount' => 0,
+            'volume' => 0,
+            'resVol' => 0,
+            'price' => 0,
+            'resPrice' => 0,
+            'system' => $names[(string)$systemId] ?? ('System ' . $systemId),
+            'oreId' => (string)$typeId,
+            'sysId' => (string)$systemId,
+            'source' => 'esi-mining-ledger',
+        ];
+    }
+    usort($entries, static fn($a, $b) => strcmp($b['date'], $a['date']));
+    return [
+        'characterId' => $characterId,
+        'characterName' => (string)$row['character_name'],
+        'entries' => $entries,
+        'count' => count($entries),
+        'fetchedAt' => gmdate('c'),
+    ];
 }
 
 function fetch_json_with_headers(string $url): array {
@@ -1173,6 +1376,33 @@ if ($action === 'sso-callback') {
         respond_html(200, '<!doctype html><meta charset="utf-8"><title>Orelytics SSO</title><meta http-equiv="refresh" content="2;url=' . $target . '"><body style="font-family:system-ui;background:#0b1016;color:#e7edf4;padding:32px"><h1>EVE verbunden</h1><p>' . $name . ' wurde mit Orelytics verbunden.</p><p><a style="color:#8bd3ff" href="' . $target . '">Zurück zu Orelytics</a></p></body>');
     } catch (Throwable $e) {
         respond_html(500, '<h1>Orelytics SSO</h1><p>SSO callback failed: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p>');
+    }
+}
+
+if ($action === 'character-mining-ledger') {
+    if (!$pdo instanceof PDO) {
+        respond(500, ['ok' => false, 'error' => 'MySQL storage is required for EVE SSO', 'dbError' => $dbError]);
+    }
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        respond(405, ['ok' => false, 'error' => 'POST required']);
+    }
+    $body = json_decode(file_get_contents('php://input') ?: '', true);
+    if (!is_array($body)) {
+        respond(400, ['ok' => false, 'error' => 'Invalid JSON body']);
+    }
+    $characterId = (int)($body['characterId'] ?? 0);
+    if ($characterId <= 0) {
+        $characters = load_sso_characters($pdo);
+        $characterId = (int)($characters[0]['characterId'] ?? 0);
+    }
+    if ($characterId <= 0) {
+        respond(400, ['ok' => false, 'error' => 'No connected character found']);
+    }
+    try {
+        $data = fetch_character_mining_ledger($pdo, $config, $characterId);
+        respond(200, ['ok' => true, 'data' => $data]);
+    } catch (Throwable $e) {
+        respond(502, ['ok' => false, 'error' => $e->getMessage()]);
     }
 }
 

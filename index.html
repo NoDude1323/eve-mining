@@ -516,6 +516,8 @@ textarea#excludedResourcesInput:focus { border-color: var(--cyan); box-shadow: 0
     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
       <button class="btn btn-primary btn-sm" onclick="connectEveSso()">Mit EVE Online verbinden</button>
       <button class="btn btn-primary btn-sm" onclick="loadEveSsoStatus()">Status aktualisieren</button>
+      <select class="price-input" id="eveSsoCharacterSelect" style="max-width:220px;"></select>
+      <button class="btn btn-primary btn-sm" onclick="importEveMiningLedger()">Mining-Tagebuch abrufen</button>
       <span class="market-source" id="eveSsoStatus">Noch nicht geprüft.</span>
     </div>
     <div class="market-source" id="eveSsoCharacters" style="margin-top:10px;"></div>
@@ -869,6 +871,7 @@ const API_BASE_URL = window.location.protocol === 'file:' ? 'http://bunker.local
 const API_TOKEN = '';
 let remoteSaveTimer = null;
 let remoteSyncEnabled = false;
+let eveSsoCharacters = [];
 
 // ─────────────── COLOR MAP ───────────────
 const ORE_COLORS = {
@@ -1891,6 +1894,35 @@ function doImport() {
   updateAll();
 }
 
+function mergeEsiMiningEntries(nextEntries) {
+  readExcludedResourcesFromUI();
+  persistExcludedResources();
+  const filtered = nextEntries.filter(e => !isExcludedResourceEntry(e));
+  const incomingKeys = new Set(filtered.map(e => e.esiKey).filter(Boolean));
+  const kept = entries.filter(e => !e.esiKey || !incomingKeys.has(e.esiKey));
+  const normalized = filtered.map(e => ({
+    id: `esi_${e.esiKey}`,
+    date: e.date,
+    pilot: e.pilot || 'Unbekannt',
+    ore: e.ore || `Type ${e.oreId || ''}`,
+    amount: Number(e.amount) || 0,
+    resAmount: Number(e.resAmount) || 0,
+    volume: Number(e.volume) || 0,
+    resVol: Number(e.resVol) || 0,
+    price: Number(e.price) || 0,
+    resPrice: Number(e.resPrice) || 0,
+    system: e.system || `System ${e.sysId || ''}`,
+    oreId: String(e.oreId || ''),
+    sysId: String(e.sysId || ''),
+    source: 'esi-mining-ledger',
+    esiKey: e.esiKey,
+  })).filter(e => e.amount > 0);
+  entries = [...kept, ...normalized];
+  saveData();
+  updateAll();
+  return { imported: normalized.length, replaced: incomingKeys.size, excluded: nextEntries.length - filtered.length };
+}
+
 function showMsg(type, text) {
   const el = document.getElementById('importMsg');
   el.className = 'msg-box ' + (type === 'ok' ? 'msg-ok' : 'msg-err');
@@ -1945,6 +1977,7 @@ function connectEveSso() {
 async function loadEveSsoStatus() {
   const statusEl = document.getElementById('eveSsoStatus');
   const charsEl = document.getElementById('eveSsoCharacters');
+  const selectEl = document.getElementById('eveSsoCharacterSelect');
   if (!statusEl || !charsEl || !API_BASE_URL) return;
   statusEl.textContent = 'EVE SSO wird geprüft...';
   try {
@@ -1958,6 +1991,12 @@ async function loadEveSsoStatus() {
       return;
     }
     const chars = payload.characters || [];
+    eveSsoCharacters = chars;
+    if (selectEl) {
+      const previous = selectEl.value;
+      selectEl.innerHTML = chars.map(char => `<option value="${char.characterId}">${escapeHtml(char.characterName)}</option>`).join('');
+      if (chars.some(char => String(char.characterId) === previous)) selectEl.value = previous;
+    }
     statusEl.textContent = chars.length ? `${chars.length} Charakter(e) verbunden.` : 'EVE SSO ist bereit, aber noch kein Charakter verbunden.';
     charsEl.innerHTML = chars.length ? chars.map(char => {
       const scopes = (char.scopes || []).join(', ') || 'keine Scopes';
@@ -1966,6 +2005,33 @@ async function loadEveSsoStatus() {
   } catch (err) {
     statusEl.textContent = `EVE SSO konnte nicht geprüft werden: ${err.message}`;
     charsEl.innerHTML = '';
+  }
+}
+
+async function importEveMiningLedger() {
+  const statusEl = document.getElementById('eveSsoStatus');
+  const selectEl = document.getElementById('eveSsoCharacterSelect');
+  if (!API_BASE_URL || !statusEl) return;
+  const characterId = Number(selectEl?.value || eveSsoCharacters[0]?.characterId || 0);
+  if (!characterId) {
+    statusEl.textContent = 'Kein verbundener Charakter ausgewählt.';
+    return;
+  }
+  statusEl.textContent = 'Mining-Tagebuch wird aus ESI geladen...';
+  try {
+    const res = await fetch(apiUrl('character-mining-ledger'), {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify({ characterId }),
+    });
+    let payload = null;
+    try { payload = await res.json(); } catch(e) {}
+    if (!res.ok) throw new Error(payload?.error || `HTTP ${res.status}`);
+    if (!payload?.ok || !payload.data) throw new Error(payload?.error || 'Ungültige API-Antwort');
+    const result = mergeEsiMiningEntries(payload.data.entries || []);
+    statusEl.textContent = `✓ ${result.imported} ESI-Ledgerzeilen für ${payload.data.characterName} übernommen${result.excluded ? `, ${result.excluded} ausgeschlossen` : ''}.`;
+  } catch (err) {
+    statusEl.textContent = `Mining-Tagebuch konnte nicht geladen werden: ${err.message}`;
   }
 }
 

@@ -33,6 +33,8 @@ Start-Scope:
 esi-industry.read_character_mining.v1
 ```
 
+Damit kann das persoenliche Mining-Tagebuch eines verbundenen Charakters abgerufen und als ESI-Ledgerzeilen importiert werden.
+
 ## Private Dateien
 
 Diese Dateien gehören nicht ins Repository:
