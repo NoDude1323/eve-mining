@@ -82,6 +82,14 @@ Empfohlene Aufrufzeiten:
 
 Wenn der Hoster keine Cronjobs anbietet, kann ein externer Webcron genau diese URL aufrufen.
 
+Die gespeicherten Snapshots koennen ueber diesen Endpunkt gelesen werden:
+
+```text
+https://SUBDOMAIN/api/index.php?action=price-snapshots
+```
+
+Die Verkaufsposten-Seite nutzt diese Daten bevorzugt fuer die Empfehlung: aktueller Station-Best-Sell minus `0,01 ISK`.
+
 ## .htaccess
 
 In `.htaccess` muss diese Zeile angepasst werden:

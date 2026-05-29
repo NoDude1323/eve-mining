@@ -21,6 +21,8 @@ Mit Datenbank kann die API aktuelle ESI Market Orders regelmaessig speichern:
 
 Der Token wird in `api/config.php` als `cron_token` gesetzt. Standardmaessig werden Domain/Amarr und die 15 Materialien der Verkaufsposten-Seite gespeichert.
 
+Die Verkaufsposten-Empfehlung nutzt gespeicherte Snapshots bevorzugt als aktuellen Station-Best-Sell minus `0,01 ISK`. 5T/20T-Werte bleiben Fallback und Trendhilfe.
+
 ## Private Dateien
 
 Diese Dateien gehören nicht ins Repository:

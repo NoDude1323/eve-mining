@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Headers: Content-Type, X-Api-Token');
+header('Access-Control-Allow-Headers: Content-Type, X-Api-Token, X-Cron-Token');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -474,6 +474,143 @@ function refresh_market_order_snapshots(PDO $pdo, int $regionId, int $stationId,
     ];
 }
 
+function snapshot_trend(array $rows): array {
+    $values = array_values(array_filter($rows, static fn($row) => numeric_price($row['station_best_sell'] ?? null) !== null));
+    $count = count($values);
+    if ($count < 4) {
+        return [
+            'direction' => 'unknown',
+            'label' => 'zu wenig Snapshots',
+            'percent' => null,
+            'days' => $count,
+            'source' => 'Eigene Snapshots',
+        ];
+    }
+    usort($values, static fn($a, $b) => strcmp((string)$a['fetched_at'], (string)$b['fetched_at']));
+    $first = (float)$values[0]['station_best_sell'];
+    $last = (float)$values[$count - 1]['station_best_sell'];
+    if ($first <= 0 || $last <= 0) {
+        return [
+            'direction' => 'unknown',
+            'label' => 'zu wenig Snapshots',
+            'percent' => null,
+            'days' => $count,
+            'source' => 'Eigene Snapshots',
+        ];
+    }
+    $percent = (($last - $first) / $first) * 100;
+    $abs = abs($percent);
+    if ($abs < 1.0) {
+        $direction = 'flat';
+        $label = 'seitwärts';
+    } elseif ($percent > 0) {
+        $direction = $abs >= 6 ? 'up' : 'up';
+        $label = $abs >= 6 ? 'stark steigend' : 'steigend';
+    } else {
+        $direction = 'down';
+        $label = $abs >= 6 ? 'stark fallend' : 'fallend';
+    }
+    return [
+        'direction' => $direction,
+        'label' => $label,
+        'percent' => $percent,
+        'days' => $count,
+        'fromDate' => $values[0]['fetched_at'] ?? null,
+        'toDate' => $values[$count - 1]['fetched_at'] ?? null,
+        'source' => 'Eigene Snapshots',
+    ];
+}
+
+function load_market_order_snapshot_summary(PDO $pdo, int $regionId, int $stationId, array $materials, int $days): array {
+    $typeIds = [];
+    $names = [];
+    foreach ($materials as $material) {
+        $typeId = (int)($material['typeId'] ?? $material['oreId'] ?? 0);
+        $name = trim((string)($material['name'] ?? $material['ore'] ?? ''));
+        if ($typeId > 0) {
+            $typeIds[] = $typeId;
+            if ($name !== '') {
+                $names[(string)$typeId] = $name;
+            }
+        }
+    }
+    $typeIds = array_values(array_unique($typeIds));
+    if (!$typeIds) {
+        return ['regionId' => $regionId, 'stationId' => $stationId, 'items' => [], 'byTypeId' => [], 'fetchedAt' => gmdate('c')];
+    }
+    $placeholders = implode(',', array_fill(0, count($typeIds), '?'));
+    $params = array_merge([$regionId, $stationId], $typeIds);
+    $latestSql = "
+        SELECT s.*
+        FROM eve_market_order_snapshots s
+        JOIN (
+          SELECT type_id, MAX(fetched_at) AS fetched_at
+          FROM eve_market_order_snapshots
+          WHERE region_id = ? AND station_id = ? AND type_id IN ($placeholders)
+          GROUP BY type_id
+        ) latest ON latest.type_id = s.type_id AND latest.fetched_at = s.fetched_at
+        WHERE s.region_id = ? AND s.station_id = ? AND s.type_id IN ($placeholders)
+        ORDER BY s.type_id ASC, s.id DESC
+    ";
+    $latestStmt = $pdo->prepare($latestSql);
+    $latestStmt->execute(array_merge($params, $params));
+    $latestRows = $latestStmt->fetchAll();
+
+    $days = max(1, min(180, $days));
+    $historySql = "
+        SELECT type_id, station_best_sell, fetched_at
+        FROM eve_market_order_snapshots
+        WHERE region_id = ? AND station_id = ? AND type_id IN ($placeholders)
+          AND fetched_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL $days DAY)
+        ORDER BY type_id ASC, fetched_at ASC
+    ";
+    $historyStmt = $pdo->prepare($historySql);
+    $historyStmt->execute($params);
+    $historyByType = [];
+    foreach ($historyStmt->fetchAll() as $row) {
+        $historyByType[(string)$row['type_id']][] = $row;
+    }
+
+    $seen = [];
+    $items = [];
+    $byTypeId = [];
+    foreach ($latestRows as $row) {
+        $typeKey = (string)$row['type_id'];
+        if (isset($seen[$typeKey])) {
+            continue;
+        }
+        $seen[$typeKey] = true;
+        $item = [
+            'typeId' => (int)$row['type_id'],
+            'name' => $names[$typeKey] ?? (string)$row['item_name'],
+            'regionBestBuy' => numeric_price($row['region_best_buy'] ?? null),
+            'regionBestSell' => numeric_price($row['region_best_sell'] ?? null),
+            'stationBestBuy' => numeric_price($row['station_best_buy'] ?? null),
+            'stationBestSell' => numeric_price($row['station_best_sell'] ?? null),
+            'regionBuyVolume' => (int)($row['region_buy_volume'] ?? 0),
+            'regionSellVolume' => (int)($row['region_sell_volume'] ?? 0),
+            'stationBuyVolume' => (int)($row['station_buy_volume'] ?? 0),
+            'stationSellVolume' => (int)($row['station_sell_volume'] ?? 0),
+            'regionBuyOrderCount' => (int)($row['region_buy_order_count'] ?? 0),
+            'regionSellOrderCount' => (int)($row['region_sell_order_count'] ?? 0),
+            'stationBuyOrderCount' => (int)($row['station_buy_order_count'] ?? 0),
+            'stationSellOrderCount' => (int)($row['station_sell_order_count'] ?? 0),
+            'snapshotTrend' => snapshot_trend($historyByType[$typeKey] ?? []),
+            'fetchedAt' => $row['fetched_at'],
+        ];
+        $items[] = $item;
+        $byTypeId[$typeKey] = $item;
+    }
+    return [
+        'regionId' => $regionId,
+        'stationId' => $stationId,
+        'days' => $days,
+        'items' => $items,
+        'byTypeId' => $byTypeId,
+        'fetchedAt' => gmdate('c'),
+    ];
+}
+
 function adam_number(string $value): float {
     $raw = html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
     $raw = trim(preg_replace('/[^\d,.\-]/', '', $raw) ?? '');
@@ -770,6 +907,33 @@ if ($action === 'refresh-price-snapshots') {
     }
 
     $data = refresh_market_order_snapshots($pdo, $regionId, $stationId, $materials);
+    respond(200, ['ok' => true, 'data' => $data]);
+}
+
+if ($action === 'price-snapshots') {
+    if (!$pdo instanceof PDO) {
+        respond(500, ['ok' => false, 'error' => 'MySQL storage is required for price snapshots', 'dbError' => $dbError]);
+    }
+    if (!in_array($_SERVER['REQUEST_METHOD'], ['GET', 'POST'], true)) {
+        respond(405, ['ok' => false, 'error' => 'GET or POST required']);
+    }
+
+    $body = [];
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $body = json_decode(file_get_contents('php://input') ?: '', true);
+        if (!is_array($body)) {
+            respond(400, ['ok' => false, 'error' => 'Invalid JSON body']);
+        }
+    }
+    $regionId = (int)($body['regionId'] ?? $_GET['regionId'] ?? 10000043);
+    $stationId = (int)($body['stationId'] ?? $_GET['stationId'] ?? 60008494);
+    $days = (int)($body['days'] ?? $_GET['days'] ?? 14);
+    $materials = $body['items'] ?? $body['materials'] ?? default_sales_materials();
+    if ($regionId <= 0 || $stationId <= 0 || !is_array($materials)) {
+        respond(400, ['ok' => false, 'error' => 'Invalid regionId, stationId or materials']);
+    }
+
+    $data = load_market_order_snapshot_summary($pdo, $regionId, $stationId, $materials, $days);
     respond(200, ['ok' => true, 'data' => $data]);
 }
 

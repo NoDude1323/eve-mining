@@ -1535,6 +1535,21 @@ function currentSalesPlansFromUI() {
   return { ...(salePlans || {}), materials };
 }
 function salesPriceRecommendation(plan) {
+  const bestSell = Number(plan.stationBestSell) || 0;
+  if (bestSell > 0) {
+    const price = bestSell > 0.01 ? bestSell - 0.01 : bestSell;
+    const orders = Number(plan.stationSellOrderCount) || 0;
+    const volume = Number(plan.stationSellVolume) || 0;
+    let quality = 'dünn';
+    if (orders >= 8 || volume >= 10000000) quality = 'gut';
+    else if (orders >= 3 || volume >= 1000000) quality = 'mittel';
+    return {
+      price,
+      basis: 'Akt. Station Sell -0,01',
+      quality,
+      detail: plan.snapshotFetchedAt ? `Stand ${plan.snapshotFetchedAt}` : '',
+    };
+  }
   const station20 = Number(plan.stationVwap20d) || 0;
   const station5 = Number(plan.stationVwap5d) || 0;
   const fallback20 = Number(plan.avgSell20d) || 0;
@@ -1555,7 +1570,7 @@ function salesPriceRecommendation(plan) {
   return { price, basis, quality };
 }
 function salesTrendMeta(plan) {
-  const trend = plan.stationTrend120d || {};
+  const trend = plan.snapshotTrend || plan.stationTrend120d || {};
   const pct = Number(trend.percent);
   if (!trend.direction || trend.direction === 'unknown' || isNaN(pct)) {
     return '<span class="market-source">—</span>';
@@ -1576,7 +1591,7 @@ function renderSalesMaterialsTable() {
     const station20 = plan.stationVwap20d ? fUnitISKPrecise(plan.stationVwap20d) : (plan.avgSell20d ? fUnitISKPrecise(plan.avgSell20d) : '—');
     const recommendation = salesPriceRecommendation(plan);
     const recommendationText = recommendation.price ? fUnitISKPrecise(recommendation.price) : '—';
-    const recommendationMeta = recommendation.basis ? `${recommendation.basis} · ${recommendation.quality}` : '';
+    const recommendationMeta = recommendation.basis ? `${recommendation.basis} · ${recommendation.quality}${recommendation.detail ? `<br>${recommendation.detail}` : ''}` : '';
     const trendMeta = salesTrendMeta(plan);
     const rangeLabel = (dates, fallback) => {
       if (Array.isArray(dates) && dates.length) return dates.length > 1 ? `${dates[0]} bis ${dates[dates.length - 1]}` : dates[0];
@@ -1648,20 +1663,83 @@ function clearSalePlans() {
   renderSalesPage();
   showSalesMsg('ok', '✓ Verkaufsposten geleert.');
 }
+async function fetchSalesSnapshotData(action) {
+  const res = await fetch(apiUrl(action), {
+    method: 'POST',
+    headers: apiHeaders(),
+    body: JSON.stringify({
+      regionId: 10000043,
+      stationId: SALES_STATION_ID,
+      items: SALES_MATERIALS,
+      days: 30,
+    }),
+  });
+  let payload = null;
+  try { payload = await res.json(); } catch(e) {}
+  if (!res.ok) throw new Error(payload?.error || `HTTP ${res.status}`);
+  if (!payload?.ok || !payload.data) throw new Error(payload?.error || 'Ungültige API-Antwort');
+  return payload.data;
+}
+function applySalesSnapshotData(nextMaterials, snapshotData) {
+  let updated = 0;
+  (snapshotData.items || []).forEach(item => {
+    const key = String(item.typeId || '');
+    if (!key) return;
+    nextMaterials[key] = {
+      ...(nextMaterials[key] || {}),
+      stationId: SALES_STATION_ID,
+      stationName: SALES_STATION_NAME,
+      regionBestBuy: item.regionBestBuy,
+      regionBestSell: item.regionBestSell,
+      stationBestBuy: item.stationBestBuy,
+      stationBestSell: item.stationBestSell,
+      regionBuyVolume: item.regionBuyVolume,
+      regionSellVolume: item.regionSellVolume,
+      stationBuyVolume: item.stationBuyVolume,
+      stationSellVolume: item.stationSellVolume,
+      regionBuyOrderCount: item.regionBuyOrderCount,
+      regionSellOrderCount: item.regionSellOrderCount,
+      stationBuyOrderCount: item.stationBuyOrderCount,
+      stationSellOrderCount: item.stationSellOrderCount,
+      snapshotTrend: item.snapshotTrend,
+      snapshotFetchedAt: item.fetchedAt || snapshotData.fetchedAt || '',
+    };
+    if (Number(item.stationBestSell) > 0 || Number(item.regionBestSell) > 0) updated++;
+  });
+  return updated;
+}
 async function refreshSalesMaterialAverages() {
   if (!API_BASE_URL) {
     showSalesMsg('err', 'PHP-API ist noch nicht verbunden.');
     return;
   }
-  showSalesMsg('ok', `Stationpreise von Adam4EVE für ${SALES_STATION_NAME} werden geladen...`);
+  showSalesMsg('ok', `Aktuelle ESI-Orders und Trenddaten für ${SALES_STATION_NAME} werden geladen...`);
   try {
     const current = currentSalesPlansFromUI();
     const nextMaterials = { ...(current.materials || {}) };
+    let snapshotUpdated = 0;
+    let snapshotSource = 'live';
     let stationUpdated = 0;
     let fallbackUpdated = 0;
     let stationCacheUsed = 0;
     let fallbackCacheUsed = 0;
     const errors = [];
+
+    try {
+      await fetchSalesSnapshotData('refresh-price-snapshots');
+      const snapshotData = await fetchSalesSnapshotData('price-snapshots');
+      snapshotUpdated = applySalesSnapshotData(nextMaterials, snapshotData);
+    } catch (snapshotErr) {
+      try {
+        const snapshotData = await fetchSalesSnapshotData('price-snapshots');
+        snapshotUpdated = applySalesSnapshotData(nextMaterials, snapshotData);
+        snapshotSource = 'DB';
+        errors.push(`ESI-Liveabruf nicht verfügbar (${snapshotErr.message}), gespeicherte Snapshots genutzt`);
+      } catch (snapshotFallbackErr) {
+        errors.push(`Snapshots nicht verfügbar (${snapshotFallbackErr.message || snapshotErr.message})`);
+      }
+    }
+
     for (const material of SALES_MATERIALS) {
       const key = String(material.typeId);
       const loadStationPrice = async () => {
@@ -1737,7 +1815,7 @@ async function refreshSalesMaterialAverages() {
         }
       }
     }
-    const updated = stationUpdated + fallbackUpdated;
+    const updated = snapshotUpdated + stationUpdated + fallbackUpdated;
     if (!updated) throw new Error(errors[0] || 'keine Preiswerte gefunden');
     salePlans = { ...current, materials: nextMaterials };
     saveSalePlanData();
@@ -1747,7 +1825,8 @@ async function refreshSalesMaterialAverages() {
     const fallbackReason = errors.length ? ` Station nicht verfügbar: ${errors[0]}` : '';
     const fallbackText = fallbackUpdated ? ` ${fallbackUpdated} Materialien mit Region-Fallback inkl. Trend${fallbackCacheText}.${fallbackReason}` : '';
     const stationText = stationUpdated ? `${stationUpdated} Materialien mit station-genauem 5T/20T VWAP und 120T-Trend${stationCacheText}` : '0 Materialien mit Stationdaten';
-    showSalesMsg('ok', `✓ ${stationText} aktualisiert.${fallbackText}`);
+    const snapshotText = snapshotUpdated ? `${snapshotUpdated} aktuelle Station-Sell-Orders aus ${snapshotSource === 'DB' ? 'DB-Snapshots' : 'ESI-Snapshots'}. ` : '';
+    showSalesMsg('ok', `✓ ${snapshotText}${stationText} aktualisiert.${fallbackText}`);
   } catch (err) {
     showSalesMsg('err', `Stationpreise konnten nicht geladen werden: ${err.message}`);
   }
