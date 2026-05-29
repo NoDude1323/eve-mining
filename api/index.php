@@ -18,6 +18,7 @@ function respond(int $status, array $payload): void {
 
 function respond_html(int $status, string $html): void {
     http_response_code($status);
+    header_remove('Content-Type');
     header('Content-Type: text/html; charset=utf-8');
     echo $html;
     exit;
@@ -1074,9 +1075,15 @@ if ($action === 'sso-status') {
     respond(200, [
         'ok' => true,
         'configured' => !empty($sso['client_id']) && !empty($sso['client_secret']) && !empty($sso['callback_url']),
+        'hasClientId' => !empty($sso['client_id']),
+        'hasClientSecret' => !empty($sso['client_secret']),
+        'hasCallbackUrl' => !empty($sso['callback_url']),
+        'callbackUrl' => $sso['callback_url'] ?? '',
+        'frontendUrl' => $sso['frontend_url'] ?? '',
         'scopes' => sso_scopes($config),
         'characters' => $pdo instanceof PDO ? load_sso_characters($pdo) : [],
         'storage' => $storage,
+        'dbError' => $dbError,
     ]);
 }
 
@@ -1090,8 +1097,12 @@ if ($action === 'sso-start') {
     if ($clientId === '' || $callbackUrl === '') {
         respond_html(500, '<h1>Orelytics SSO</h1><p>EVE SSO is not configured.</p>');
     }
-    $state = bin2hex(random_bytes(24));
-    save_sso_state($pdo, $state);
+    try {
+        $state = bin2hex(random_bytes(24));
+        save_sso_state($pdo, $state);
+    } catch (Throwable $e) {
+        respond_html(500, '<h1>Orelytics SSO</h1><p>Could not create SSO state: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p>');
+    }
     $params = [
         'response_type' => 'code',
         'client_id' => $clientId,
@@ -1099,6 +1110,7 @@ if ($action === 'sso-start') {
         'scope' => implode(' ', sso_scopes($config)),
         'state' => $state,
     ];
+    header_remove('Content-Type');
     header('Location: https://login.eveonline.com/v2/oauth/authorize?' . http_build_query($params));
     exit;
 }
