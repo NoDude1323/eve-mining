@@ -33,6 +33,26 @@ function default_state(): array {
     ];
 }
 
+function default_sales_materials(): array {
+    return [
+        ['typeId' => 34, 'name' => 'Tritanium'],
+        ['typeId' => 35, 'name' => 'Pyerite'],
+        ['typeId' => 36, 'name' => 'Mexallon'],
+        ['typeId' => 37, 'name' => 'Isogen'],
+        ['typeId' => 38, 'name' => 'Nocxium'],
+        ['typeId' => 39, 'name' => 'Zydrine'],
+        ['typeId' => 40, 'name' => 'Megacyte'],
+        ['typeId' => 11399, 'name' => 'Morphite'],
+        ['typeId' => 16272, 'name' => 'Heavy Water'],
+        ['typeId' => 16273, 'name' => 'Liquid Ozone'],
+        ['typeId' => 16274, 'name' => 'Helium Isotopes'],
+        ['typeId' => 16275, 'name' => 'Strontium Clathrates'],
+        ['typeId' => 17887, 'name' => 'Oxygen Isotopes'],
+        ['typeId' => 17888, 'name' => 'Nitrogen Isotopes'],
+        ['typeId' => 17889, 'name' => 'Hydrogen Isotopes'],
+    ];
+}
+
 function read_config(): array {
     $path = __DIR__ . '/config.php';
     if (!is_file($path)) {
@@ -72,6 +92,31 @@ function pdo_or_null(array $config): ?PDO {
           source VARCHAR(64) NOT NULL,
           payload_json LONGTEXT NOT NULL,
           fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+    );
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS eve_market_order_snapshots (
+          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          region_id INT NOT NULL,
+          station_id BIGINT UNSIGNED NULL,
+          type_id INT NOT NULL,
+          item_name VARCHAR(128) NOT NULL,
+          region_best_buy DECIMAL(20,8) NULL,
+          region_best_sell DECIMAL(20,8) NULL,
+          station_best_buy DECIMAL(20,8) NULL,
+          station_best_sell DECIMAL(20,8) NULL,
+          region_buy_volume BIGINT UNSIGNED NOT NULL DEFAULT 0,
+          region_sell_volume BIGINT UNSIGNED NOT NULL DEFAULT 0,
+          station_buy_volume BIGINT UNSIGNED NOT NULL DEFAULT 0,
+          station_sell_volume BIGINT UNSIGNED NOT NULL DEFAULT 0,
+          region_buy_order_count INT UNSIGNED NOT NULL DEFAULT 0,
+          region_sell_order_count INT UNSIGNED NOT NULL DEFAULT 0,
+          station_buy_order_count INT UNSIGNED NOT NULL DEFAULT 0,
+          station_sell_order_count INT UNSIGNED NOT NULL DEFAULT 0,
+          source VARCHAR(64) NOT NULL,
+          fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          KEY idx_snapshot_lookup (region_id, station_id, type_id, fetched_at),
+          KEY idx_snapshot_fetched_at (fetched_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
     );
     return $pdo;
@@ -327,9 +372,13 @@ function fetch_esi_market_orders(int $regionId, int $typeId, string $orderType):
     return $orders;
 }
 
-function summarize_esi_market_orders(array $buyOrders, array $sellOrders): array {
+function summarize_esi_market_orders(array $buyOrders, array $sellOrders, ?int $stationId = null): array {
     $buyOrders = array_values(array_filter($buyOrders, static fn($order) => !empty($order['is_buy_order']) && numeric_price($order['price'] ?? null) !== null));
     $sellOrders = array_values(array_filter($sellOrders, static fn($order) => empty($order['is_buy_order']) && numeric_price($order['price'] ?? null) !== null));
+    if ($stationId !== null && $stationId > 0) {
+        $buyOrders = array_values(array_filter($buyOrders, static fn($order) => (int)($order['location_id'] ?? 0) === $stationId));
+        $sellOrders = array_values(array_filter($sellOrders, static fn($order) => (int)($order['location_id'] ?? 0) === $stationId));
+    }
 
     usort($buyOrders, static fn($a, $b) => (float)$b['price'] <=> (float)$a['price']);
     usort($sellOrders, static fn($a, $b) => (float)$a['price'] <=> (float)$b['price']);
@@ -344,6 +393,84 @@ function summarize_esi_market_orders(array $buyOrders, array $sellOrders): array
         'sellVolume' => $sellVolume,
         'buyOrderCount' => count($buyOrders),
         'sellOrderCount' => count($sellOrders),
+    ];
+}
+
+function save_market_order_snapshot(PDO $pdo, int $regionId, ?int $stationId, array $material, array $regionSummary, array $stationSummary): void {
+    $stmt = $pdo->prepare(
+        'INSERT INTO eve_market_order_snapshots (
+          region_id, station_id, type_id, item_name,
+          region_best_buy, region_best_sell, station_best_buy, station_best_sell,
+          region_buy_volume, region_sell_volume, station_buy_volume, station_sell_volume,
+          region_buy_order_count, region_sell_order_count, station_buy_order_count, station_sell_order_count,
+          source
+        ) VALUES (
+          :region_id, :station_id, :type_id, :item_name,
+          :region_best_buy, :region_best_sell, :station_best_buy, :station_best_sell,
+          :region_buy_volume, :region_sell_volume, :station_buy_volume, :station_sell_volume,
+          :region_buy_order_count, :region_sell_order_count, :station_buy_order_count, :station_sell_order_count,
+          :source
+        )'
+    );
+    $stmt->execute([
+        ':region_id' => $regionId,
+        ':station_id' => $stationId,
+        ':type_id' => (int)$material['typeId'],
+        ':item_name' => (string)$material['name'],
+        ':region_best_buy' => $regionSummary['buy'],
+        ':region_best_sell' => $regionSummary['sell'],
+        ':station_best_buy' => $stationSummary['buy'],
+        ':station_best_sell' => $stationSummary['sell'],
+        ':region_buy_volume' => (int)($regionSummary['buyVolume'] ?? 0),
+        ':region_sell_volume' => (int)($regionSummary['sellVolume'] ?? 0),
+        ':station_buy_volume' => (int)($stationSummary['buyVolume'] ?? 0),
+        ':station_sell_volume' => (int)($stationSummary['sellVolume'] ?? 0),
+        ':region_buy_order_count' => (int)($regionSummary['buyOrderCount'] ?? 0),
+        ':region_sell_order_count' => (int)($regionSummary['sellOrderCount'] ?? 0),
+        ':station_buy_order_count' => (int)($stationSummary['buyOrderCount'] ?? 0),
+        ':station_sell_order_count' => (int)($stationSummary['sellOrderCount'] ?? 0),
+        ':source' => 'ESI market orders',
+    ]);
+}
+
+function refresh_market_order_snapshots(PDO $pdo, int $regionId, int $stationId, array $materials): array {
+    $saved = 0;
+    $errors = [];
+    $items = [];
+    foreach ($materials as $material) {
+        $typeId = (int)($material['typeId'] ?? $material['oreId'] ?? 0);
+        $name = trim((string)($material['name'] ?? $material['ore'] ?? ''));
+        if ($typeId <= 0 || $name === '') {
+            continue;
+        }
+        try {
+            $buyOrders = fetch_esi_market_orders($regionId, $typeId, 'buy');
+            $sellOrders = fetch_esi_market_orders($regionId, $typeId, 'sell');
+            $regionSummary = summarize_esi_market_orders($buyOrders, $sellOrders);
+            $stationSummary = summarize_esi_market_orders($buyOrders, $sellOrders, $stationId);
+            $normalized = ['typeId' => $typeId, 'name' => $name];
+            save_market_order_snapshot($pdo, $regionId, $stationId, $normalized, $regionSummary, $stationSummary);
+            $saved++;
+            $items[] = [
+                'typeId' => $typeId,
+                'name' => $name,
+                'regionBestBuy' => $regionSummary['buy'],
+                'regionBestSell' => $regionSummary['sell'],
+                'stationBestBuy' => $stationSummary['buy'],
+                'stationBestSell' => $stationSummary['sell'],
+                'stationSellOrderCount' => $stationSummary['sellOrderCount'],
+            ];
+        } catch (Throwable $e) {
+            $errors[] = ['typeId' => $typeId, 'name' => $name, 'error' => $e->getMessage()];
+        }
+    }
+    return [
+        'regionId' => $regionId,
+        'stationId' => $stationId,
+        'saved' => $saved,
+        'errors' => $errors,
+        'items' => $items,
+        'fetchedAt' => gmdate('c'),
     ];
 }
 
@@ -588,8 +715,13 @@ function market_history_trend(array $rows, int $days = 120): array {
 }
 
 $config = read_config();
+$action = $_GET['action'] ?? 'load';
 $expectedToken = (string)($config['api_token'] ?? '');
-if ($expectedToken !== '' && !hash_equals($expectedToken, request_header('X-Api-Token'))) {
+$providedToken = request_header('X-Api-Token');
+$cronToken = (string)($config['cron_token'] ?? '');
+$providedCronToken = (string)($_GET['token'] ?? request_header('X-Cron-Token'));
+$cronAuthorized = $action === 'refresh-price-snapshots' && $cronToken !== '' && hash_equals($cronToken, $providedCronToken);
+if ($expectedToken !== '' && !hash_equals($expectedToken, $providedToken) && !$cronAuthorized) {
     respond(401, ['ok' => false, 'error' => 'Unauthorized']);
 }
 
@@ -601,7 +733,6 @@ try {
     $dbError = $e->getMessage();
 }
 
-$action = $_GET['action'] ?? 'load';
 $storage = $pdo instanceof PDO ? 'mysql' : 'file';
 
 if ($action === 'health') {
@@ -614,6 +745,32 @@ if ($action === 'health') {
         'curl' => extension_loaded('curl'),
         'dbError' => $dbError,
     ]);
+}
+
+if ($action === 'refresh-price-snapshots') {
+    if (!$pdo instanceof PDO) {
+        respond(500, ['ok' => false, 'error' => 'MySQL storage is required for price snapshots', 'dbError' => $dbError]);
+    }
+    if (!in_array($_SERVER['REQUEST_METHOD'], ['GET', 'POST'], true)) {
+        respond(405, ['ok' => false, 'error' => 'GET or POST required']);
+    }
+
+    $body = [];
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $body = json_decode(file_get_contents('php://input') ?: '', true);
+        if (!is_array($body)) {
+            respond(400, ['ok' => false, 'error' => 'Invalid JSON body']);
+        }
+    }
+    $regionId = (int)($body['regionId'] ?? $_GET['regionId'] ?? 10000043);
+    $stationId = (int)($body['stationId'] ?? $_GET['stationId'] ?? 60008494);
+    $materials = $body['items'] ?? $body['materials'] ?? default_sales_materials();
+    if ($regionId <= 0 || $stationId <= 0 || !is_array($materials)) {
+        respond(400, ['ok' => false, 'error' => 'Invalid regionId, stationId or materials']);
+    }
+
+    $data = refresh_market_order_snapshots($pdo, $regionId, $stationId, $materials);
+    respond(200, ['ok' => true, 'data' => $data]);
 }
 
 if ($action === 'market-prices') {

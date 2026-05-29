@@ -4,6 +4,10 @@ return [
     // Leave empty for local/private setups where no token is needed.
     'api_token' => '',
 
+    // Optional: token for scheduled market snapshot calls.
+    // Example URL: /api/?action=refresh-price-snapshots&token=change-me
+    'cron_token' => '',
+
     // MySQL/MariaDB connection. If this block is removed or pdo_mysql is missing,
     // the API falls back to api/data/eve-mining-state.json file storage.
     'db' => [

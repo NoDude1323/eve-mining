@@ -11,6 +11,16 @@ Lokales Webtool zur Auswertung von EVE Online Mining-Ledger-Daten, Marktpreisen 
 
 Ohne Datenbank nutzt die PHP-API lokalen Datei-Speicher unter `api/data/`.
 
+## Marktpreis-Snapshots
+
+Mit Datenbank kann die API aktuelle ESI Market Orders regelmaessig speichern:
+
+```text
+/api/index.php?action=refresh-price-snapshots&token=CRON_TOKEN
+```
+
+Der Token wird in `api/config.php` als `cron_token` gesetzt. Standardmaessig werden Domain/Amarr und die 15 Materialien der Verkaufsposten-Seite gespeichert.
+
 ## Private Dateien
 
 Diese Dateien gehören nicht ins Repository:

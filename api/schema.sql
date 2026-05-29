@@ -10,3 +10,27 @@ CREATE TABLE IF NOT EXISTS eve_market_cache (
   payload_json LONGTEXT NOT NULL,
   fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS eve_market_order_snapshots (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  region_id INT NOT NULL,
+  station_id BIGINT UNSIGNED NULL,
+  type_id INT NOT NULL,
+  item_name VARCHAR(128) NOT NULL,
+  region_best_buy DECIMAL(20,8) NULL,
+  region_best_sell DECIMAL(20,8) NULL,
+  station_best_buy DECIMAL(20,8) NULL,
+  station_best_sell DECIMAL(20,8) NULL,
+  region_buy_volume BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  region_sell_volume BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  station_buy_volume BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  station_sell_volume BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  region_buy_order_count INT UNSIGNED NOT NULL DEFAULT 0,
+  region_sell_order_count INT UNSIGNED NOT NULL DEFAULT 0,
+  station_buy_order_count INT UNSIGNED NOT NULL DEFAULT 0,
+  station_sell_order_count INT UNSIGNED NOT NULL DEFAULT 0,
+  source VARCHAR(64) NOT NULL,
+  fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_snapshot_lookup (region_id, station_id, type_id, fetched_at),
+  KEY idx_snapshot_fetched_at (fetched_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
