@@ -1744,11 +1744,10 @@ async function refreshSalesMaterialAverages() {
     renderSalesPage();
     const fallbackCacheText = fallbackCacheUsed ? `, davon ${fallbackCacheUsed} aus DB-Cache` : '';
     const stationCacheText = stationCacheUsed ? `, davon ${stationCacheUsed} aus DB-Cache` : '';
-    const fallbackText = fallbackUpdated ? ` ${fallbackUpdated} Materialien mit Region-Fallback inkl. Trend${fallbackCacheText}. Erstes Problem: ${errors[0]}` : '';
+    const fallbackReason = errors.length ? ` Station nicht verfügbar: ${errors[0]}` : '';
+    const fallbackText = fallbackUpdated ? ` ${fallbackUpdated} Materialien mit Region-Fallback inkl. Trend${fallbackCacheText}.${fallbackReason}` : '';
     const stationText = stationUpdated ? `${stationUpdated} Materialien mit station-genauem 5T/20T VWAP und 120T-Trend${stationCacheText}` : '0 Materialien mit Stationdaten';
-    const status = fallbackUpdated && !stationUpdated ? 'err' : 'ok';
-    const prefix = status === 'ok' ? '✓' : '!';
-    showSalesMsg(status, `${prefix} ${stationText} aktualisiert.${fallbackText}`);
+    showSalesMsg('ok', `✓ ${stationText} aktualisiert.${fallbackText}`);
   } catch (err) {
     showSalesMsg('err', `Stationpreise konnten nicht geladen werden: ${err.message}`);
   }
